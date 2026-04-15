@@ -20,6 +20,10 @@ const pointSchema = new Schema({
   coordinates: {
     type: [Number], // [lng, lat]
     index: "2dsphere",
+    validate:{               //validate coordinates
+      validator:v => v.length === 2,
+      message:"coordinates must be [lng, lat]"
+    }
   },
 }, { _id: false });
 
@@ -69,15 +73,16 @@ const userSchema = new Schema({
   },
 
   // ---------- Role ----------
-  type: {
-    type: String,
-    enum: ["customer", "provider", "driver", "business", "admin"],
-    default: "customer",
-  },
+  // type: {
+  //   type: String,
+  //   enum: ["customer", "provider", "driver", "business", "admin"],
+  //   default: "customer",
+  // },
 
-  roles: {
+  roles: {                   
     type: [String],
-    default: ["user"],
+    enum:["customer","provider","driver","business","admin"],
+    default: ["customer"],
   },
 
   // ---------- Provider ----------
@@ -153,6 +158,7 @@ const userSchema = new Schema({
     last_login_at: Date,
   },
 
-}, { timestamps: true });
+},
+  { timestamps: true });
 
 export default mongoose.model("User", userSchema);
