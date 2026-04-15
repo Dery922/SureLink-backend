@@ -54,11 +54,11 @@ const userSchema = new Schema({
       verified: { type: Boolean, default: false },
       verified_at: Date,
     },
-    ghana_card: {
-      verified: { type: Boolean, default: false },
-      card_reference: String,
-      card_number_hashed: String,
-    },
+    // ghana_card: {
+    //   verified: { type: Boolean, default: false },
+    //   card_reference: String,
+    //   card_number_hashed: String,
+    // },
   },
 
   // ---------- Role ----------
