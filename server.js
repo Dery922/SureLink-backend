@@ -12,8 +12,8 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 
 // Routes
-import authRoutes from "./src/modules/auth/auth.routes.js";
-import userRoutes from "./src/modules/users/user.routes.js";
+// import authRoutes from "./src/modules/auth/auth.routes.js";
+// import userRoutes from "./src/modules/users/user.routes.js";
 
 // Socket (for future use)
 import { Server } from "socket.io";
@@ -62,7 +62,7 @@ app.use(
       sameSite: "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     },
-    name: "surelink.sid", // Don't use default 'connect.sid'
+    name: "surelink.sid", 
   })
 );
 
@@ -80,8 +80,8 @@ app.use("/api", limiter);
 //=================== END OF MIDDLEWARE===========
 
 // ================== ROUTES ==================
-app.use("/api/auth", authRoutes);
-app.use("/api/users", userRoutes);
+// app.use("/api/auth", authRoutes);
+// app.use("/api/users", userRoutes);
 
 // Health check
 app.get("/", (req, res) => {
@@ -122,7 +122,7 @@ io.on("connection", (socket) => {
 });
 
 // ================== START SERVER ==================
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8000;
 
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
