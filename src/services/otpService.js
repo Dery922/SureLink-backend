@@ -2,6 +2,16 @@ import crypto from "crypto";
 import { AppError } from "../utils/errors.js";
 import { publishEvent } from "./eventBus.js";
 
+/**
+ * OTP service.
+ *
+ * This implementation stores OTP state in the user's server-side session
+ * (`req.session.pending_otp`). That means:
+ * - OTP verification is tied to the same browser/device session that requested it
+ * - OTPs are not globally verifiable across devices unless you change storage
+ *
+ * For production, integrate SMS/WhatsApp delivery where `issueOtp` is called.
+ */
 const OTP_TTL_MS = 5 * 60 * 1000;
 const OTP_DIGITS = 6;
 
@@ -15,6 +25,14 @@ function generateOtp() {
   return String(Math.floor(Math.random() * (max - min + 1) + min));
 }
 
+/**
+ * Generate an OTP, store a hashed version in session, and return a response
+ * suitable for the API layer.
+ *
+ * Security notes:
+ * - We only store a hash of the OTP.
+ * - `otp_preview` is intentionally hidden in production.
+ */
 export function issueOtp(req, payload) {
   const otp = generateOtp();
   req.session.pending_otp = {
@@ -45,6 +63,12 @@ export function issueOtp(req, payload) {
   return response;
 }
 
+/**
+ * Verify an OTP against the session-scoped pending request.
+ *
+ * On success, clears `pending_otp` and returns a verified payload for the auth
+ * service to consume (register/login).
+ */
 export function verifyOtp(req, { phone, otp }) {
   const pending = req.session.pending_otp;
   if (!pending) {

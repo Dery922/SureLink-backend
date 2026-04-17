@@ -1,5 +1,15 @@
 import { redisClient } from "../utils/redisClient.js";
 
+/**
+ * SessionRepository (Redis).
+ *
+ * Storage strategy:
+ * - A session is stored as `auth:session:<token_hash>` -> JSON payload (TTL set).
+ * - For "logout all", we also maintain a per-user set:
+ *   `auth:user-sessions:<userId>` -> set of token_hash values.
+ *
+ * `token_hash` is used instead of raw token so Redis never stores bearer tokens.
+ */
 export class SessionRepository {
   tokenKey(tokenHash) {
     return `auth:session:${tokenHash}`;
@@ -9,6 +19,11 @@ export class SessionRepository {
     return `auth:user-sessions:${userId}`;
   }
 
+  /**
+   * Persist a session with a TTL derived from `expires_at`.
+   *
+   * Note: we clamp TTL to at least 1 second to avoid Redis rejecting EX=0.
+   */
   async create(payload) {
     const tokenKey = this.tokenKey(payload.token_hash);
     const userSetKey = this.userSetKey(payload.user_id);
@@ -38,12 +53,20 @@ export class SessionRepository {
     return { token_hash: payload.token_hash, expires_at: payload.expires_at };
   }
 
+  /**
+   * Lookup an active session by token hash.
+   *
+   * Returns the stored JSON payload or null if missing/expired.
+   */
   async findByTokenHash(tokenHash) {
     const raw = await redisClient.get(this.tokenKey(tokenHash));
     if (!raw) return null;
     return JSON.parse(raw);
   }
 
+  /**
+   * Delete a session key and remove it from the per-user set (best effort).
+   */
   async deleteByTokenHash(tokenHash) {
     const session = await this.findByTokenHash(tokenHash);
     await redisClient.del(this.tokenKey(tokenHash));
@@ -53,6 +76,11 @@ export class SessionRepository {
     }
   }
 
+  /**
+   * Delete all sessions for a user.
+   *
+   * Returns the number of revoked sessions.
+   */
   async deleteByUserId(userId) {
     const userSetKey = this.userSetKey(userId);
     const tokenHashes = await redisClient.sMembers(userSetKey);
