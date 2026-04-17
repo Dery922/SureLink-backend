@@ -16,6 +16,12 @@ import {
 
 const router = Router();
 
+/**
+ * Auth route-level rate limit.
+ *
+ * This is intentionally stricter than the global `/api` limiter in `server.js`
+ * because OTP endpoints are high-risk for brute-force / SMS abuse.
+ */
 const authLimiter = rateLimit({
   max: 20,
   windowMs: 15 * 60 * 1000,
@@ -31,6 +37,11 @@ const authLimiter = rateLimit({
   },
 });
 
+/**
+ * Auth module routes.
+ *
+ * Validation middleware keeps controllers thin and consistent.
+ */
 router.post("/request-otp", authLimiter, validateRequestOtp, requestOtp);
 router.post("/verify-otp", authLimiter, validateVerifyOtp, verifyOtpAndRegister);
 router.post("/refresh", authLimiter, validateSessionTokenRequest, refreshSession);

@@ -3,6 +3,15 @@ import { AppError } from "./errors.js";
 
 let redisClient;
 
+/**
+ * Redis client singleton.
+ *
+ * The app uses Redis for:
+ * - Express session storage (via `connect-redis`)
+ * - Auth session records (token hashes) via `SessionRepository`
+ *
+ * Keep a single client instance to avoid excessive connections.
+ */
 export function getRedisClient() {
   if (redisClient) return redisClient;
 
@@ -18,6 +27,11 @@ export function getRedisClient() {
   return redisClient;
 }
 
+/**
+ * Connect Redis if not already connected.
+ *
+ * Throws an `AppError` to be handled by the global error handler during startup.
+ */
 export async function connectRedis() {
   const client = getRedisClient();
   if (client.isOpen) return client;

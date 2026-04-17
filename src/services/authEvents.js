@@ -2,6 +2,13 @@ import { subscribeEvent } from "./eventBus.js";
 
 let isInitialized = false;
 
+/**
+ * Wire up auth domain event handlers.
+ *
+ * This is idempotent to avoid double subscriptions during hot reloads or tests.
+ * Handlers are currently logging-only, but the event names/payloads are treated
+ * as a stable contract so they can be extended (e.g. SMS provider, audit logs).
+ */
 export function initializeAuthEventHandlers() {
   if (isInitialized) return;
 

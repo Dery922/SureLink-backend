@@ -4,6 +4,13 @@ function isBlank(value) {
   return value === undefined || value === null || String(value).trim() === "";
 }
 
+/**
+ * Validate input for requesting an OTP.
+ *
+ * Kept intentionally small and dependency-free (no DB calls): it only verifies
+ * required fields and basic enum constraints. Phone normalization/network
+ * support checks happen deeper in the auth service layer.
+ */
 export function validateRequestOtp(req, res, next) {
   const { phone, full_name: fullNameSnake, fullName, type } = req.body || {};
 
@@ -22,6 +29,12 @@ export function validateRequestOtp(req, res, next) {
   return next();
 }
 
+/**
+ * Validate input for OTP verification.
+ *
+ * OTP is validated as a 6-digit string to avoid numeric parsing pitfalls
+ * (e.g. leading zeros).
+ */
 export function validateVerifyOtp(req, res, next) {
   const { phone, otp } = req.body || {};
 
@@ -36,6 +49,11 @@ export function validateVerifyOtp(req, res, next) {
   return next();
 }
 
+/**
+ * Validate requests that require a `session_token` (refresh/logout).
+ *
+ * The service layer re-validates token shape as a defense-in-depth measure.
+ */
 export function validateSessionTokenRequest(req, res, next) {
   const { session_token: sessionToken } = req.body || {};
 

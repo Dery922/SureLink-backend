@@ -7,7 +7,23 @@ import { UserFactory } from "../factories/userFactory.js";
 import { SessionFactory } from "../factories/sessionFactory.js";
 import { OtpFactory } from "../factories/otpFactory.js";
 
+/**
+ * Auth service layer.
+ *
+ * Responsibilities:
+ * - Normalize/validate identifiers (e.g. phone)
+ * - Create or lookup users
+ * - Create/refresh/revoke sessions (via repositories)
+ * - Emit domain events for side effects/observability
+ *
+ * Controllers and middleware should remain thin and defer business rules here.
+ */
 
+/**
+ * Create and persist a session for a user, then emit an event.
+ *
+ * Session tokens are only returned once; downstream storage keeps a hash.
+ */
 async function createSessionForUser({ userId, ip, user_agent }) {
   const sessionPayload = SessionFactory.createSessionPayload({
     userId,
@@ -30,6 +46,11 @@ async function createSessionForUser({ userId, ip, user_agent }) {
   });
 }
 
+/**
+ * Prepare and validate the payload needed to issue an OTP.
+ *
+ * Accepts both `full_name` and `fullName` to be tolerant of client conventions.
+ */
 export async function prepareOtpPayload(input) {
   const phone = normalizeGhanaPhone(input.phone);
   validateNormalizedPhone(phone);
@@ -44,18 +65,33 @@ export async function prepareOtpPayload(input) {
   });
 }
 
+/**
+ * Validate a *normalized* Ghana phone number against supported networks.
+ *
+ * Keep this separate from normalization so callers can reuse the policy after
+ * normalizing elsewhere.
+ */
 export function validateNormalizedPhone(phone) {
   if (!isValidGhanaPhone(phone)) {
     throw new AppError("Unsupported phone network for Ghana", 400, "AUTH_INVALID_PHONE");
   }
 }
 
+/**
+ * Normalize any supported Ghana phone input shape then validate network support.
+ */
 export function normalizeAndValidatePhone(phoneInput) {
   const phone = normalizeGhanaPhone(phoneInput);
   validateNormalizedPhone(phone);
   return phone;
 }
 
+/**
+ * Create a user if needed, then create a session.
+ *
+ * Returns both the user "state" (created/existing) and a public user shape for
+ * API responses.
+ */
 export async function registerOrLoginUser(payload) {
   let user = await userRepository.findByPhone(payload.phone);
   let userState = "existing";
@@ -93,6 +129,17 @@ export async function registerOrLoginUser(payload) {
   };
 }
 
+/**
+ * Rotate a session token.
+ *
+ * Strategy:
+ * - Validate token format
+ * - Look up active session by token hash
+ * - Delete old session
+ * - Create new session
+ *
+ * This prevents replay by ensuring the old token becomes invalid immediately.
+ */
 export async function refreshUserSession(payload) {
   const sessionToken = SessionFactory.ensureSessionTokenShape(payload.session_token);
   const tokenHash = SessionFactory.hashToken(sessionToken);
@@ -115,6 +162,12 @@ export async function refreshUserSession(payload) {
   };
 }
 
+/**
+ * Revoke a single session token.
+ *
+ * Returns success even if the session doesn't exist to keep logout idempotent
+ * (useful for clients retrying).
+ */
 export async function logoutSession(payload) {
   const sessionToken = SessionFactory.ensureSessionTokenShape(payload.session_token);
   const tokenHash = SessionFactory.hashToken(sessionToken);
@@ -128,6 +181,11 @@ export async function logoutSession(payload) {
   return { message: "Logout successful" };
 }
 
+/**
+ * Revoke all sessions for the current user.
+ *
+ * Requires the provided token to be valid so we can resolve the owning user id.
+ */
 export async function logoutAllSessions(payload) {
   const sessionToken = SessionFactory.ensureSessionTokenShape(payload.session_token);
   const tokenHash = SessionFactory.hashToken(sessionToken);

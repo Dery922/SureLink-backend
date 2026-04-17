@@ -6,7 +6,6 @@ import cors from "cors";
 import session from "express-session";
 import { RedisStore } from "connect-redis";
 
-
 // Security
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -21,6 +20,17 @@ import { connectRedis, getRedisClient } from "./src/utils/redisClient.js";
 // Socket (for future use)
 import { Server } from "socket.io";
 
+/**
+ * Application entrypoint.
+ *
+ * High-level boot order:
+ * - Load env
+ * - Initialize in-process event handlers
+ * - Configure Express (security, CORS, rate limit)
+ * - Connect Redis and wire session middleware
+ * - Register routes and global error handler
+ * - Connect MongoDB and start HTTP server
+ */
 dotenv.config();
 initializeAuthEventHandlers();
 
@@ -35,7 +45,7 @@ const io = new Server(server, {
   },
 });
 
-//io is accessible in all routes/controllers
+// Make Socket.IO available to route handlers/controllers if needed.
 app.set("io", io);
 
 // ================== MIDDLEWARE ==================
@@ -54,7 +64,7 @@ app.use(
 // Security headers
 app.use(helmet());
 
-// Rate limiting (important for auth)
+// Global rate limiting (auth endpoints also apply a stricter module limiter).
 const limiter = rateLimit({
   max: 100,
   windowMs: 15 * 60 * 1000, // 15 mins
@@ -92,6 +102,10 @@ async function bootstrap() {
 
   await connectRedis();
 
+  /**
+   * Session cookies are required because OTP state is stored on the server side
+   * (`req.session.pending_otp`) in the current auth implementation.
+   */
   app.use(
     session({
       secret: process.env.SESSION_SECRET,
