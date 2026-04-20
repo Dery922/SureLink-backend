@@ -1,7 +1,14 @@
-// models/User.js
 import mongoose from "mongoose";
 
 const { Schema } = mongoose;
+
+/**
+ * User model.
+ *
+ * This schema is intentionally broad to support multiple actor types
+ * (customer/provider/driver/business/admin). Keep auth-critical fields stable:
+ * `phone` (unique), `type`, and `verification.phone`.
+ */
 
 // ========== GEO SCHEMA ==========
 const pointSchema = new Schema({
@@ -54,11 +61,11 @@ const userSchema = new Schema({
       verified: { type: Boolean, default: false },
       verified_at: Date,
     },
-    ghana_card: {
-      verified: { type: Boolean, default: false },
-      card_reference: String,
-      card_number_hashed: String,
-    },
+    // ghana_card: {
+    //   verified: { type: Boolean, default: false },
+    //   card_reference: String,
+    //   card_number_hashed: String,
+    // },
   },
 
   // ---------- Role ----------
@@ -116,7 +123,6 @@ const userSchema = new Schema({
 
   // ---------- Security ----------
   security: {
-    failed_login_attempts: { type: Number, default: 0 },
     mfa_enabled: { type: Boolean, default: false },
   },
 
@@ -137,13 +143,6 @@ const userSchema = new Schema({
       sms: { type: Boolean, default: true },
       push: { type: Boolean, default: true },
     },
-  },
-
-  // ---------- Audit ----------
-  audit: {
-    created_at: { type: Date, default: Date.now },
-    updated_at: Date,
-    last_login_at: Date,
   },
 
 }, { timestamps: true });

@@ -4,24 +4,38 @@ import dotenv from "dotenv";
 import http from "http";
 import cors from "cors";
 import session from "express-session";
-import MongoStore from "connect-mongo";
-
+import { RedisStore } from "connect-redis";
 
 // Security
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
+import { errorResponse } from "./src/services/apiResponse.js";
 
 // Routes
-import authRoutes from "./src/modules/auth/auth.routes.js";
-import userRoutes from "./src/modules/users/user.routes.js";
+import authRoutes from "./src/services/auth.routes.js";
+import userRoutes from "./src/services/user.routes.js";
+import { initializeAuthEventHandlers } from "./src/services/authEvents.js";
+import { connectRedis, getRedisClient } from "./src/services/redisClient.js";
 
 // Socket (for future use)
 import { Server } from "socket.io";
 
+/**
+ * Application entrypoint.
+ *
+ * High-level boot order:
+ * - Load env
+ * - Initialize in-process event handlers
+ * - Configure Express (security, CORS, rate limit)
+ * - Connect Redis and wire session middleware
+ * - Register routes and global error handler
+ * - Connect MongoDB and start HTTP server
+ */
 dotenv.config();
+initializeAuthEventHandlers();
 
 const app = express();
 const server = http.createServer(app);
+const redisClient = getRedisClient();
 
 // ================== SOCKET.IO ==================
 const io = new Server(server, {
@@ -30,7 +44,7 @@ const io = new Server(server, {
   },
 });
 
-//io is accessible in all routes/controllers
+// Make Socket.IO available to route handlers/controllers if needed.
 app.set("io", io);
 
 // ================== MIDDLEWARE ==================
@@ -46,71 +60,10 @@ app.use(
   })
 );
 
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    store: MongoStore.create({
-      mongoUrl: process.env.MONGO_URI,
-      collectionName: "sessions",
-      ttl: 7 * 24 * 60 * 60, // 7 days
-    }),
-    cookie: {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    },
-    name: "surelink.sid", // Don't use default 'connect.sid'
-  })
-);
-
 // Security headers
 app.use(helmet());
 
-// Rate limiting (important for auth)
-const limiter = rateLimit({
-  max: 100,
-  windowMs: 15 * 60 * 1000, // 15 mins
-  message: "Too many requests, please try again later.",
-});
-app.use("/api", limiter);
-
 //=================== END OF MIDDLEWARE===========
-
-// ================== ROUTES ==================
-app.use("/api/auth", authRoutes);
-app.use("/api/users", userRoutes);
-
-// Health check
-app.get("/", (req, res) => {
-  res.send("🚀 LocalLink API is running...");
-});
-
-
-//==================== END OF ROUTES ======================
-
-// ================== GLOBAL ERROR HANDLER ==================
-app.use((err, req, res, next) => {
-  console.error(err);
-
-  res.status(err.status || 500).json({
-    success: false,
-    message: err.message || "Internal Server Error",
-  });
-});
-
-//================= END OF GLOBAL ERROR HANDLE==============
-
-// ================== DATABASE ==================
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ MongoDB connected"))
-  .catch((err) => {
-    console.error("❌ DB connection error:", err);
-    process.exit(1);
-  });
 
 // ================== SOCKET EVENTS ==================
 io.on("connection", (socket) => {
@@ -124,6 +77,70 @@ io.on("connection", (socket) => {
 // ================== START SERVER ==================
 const PORT = process.env.PORT || 5000;
 
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+async function bootstrap() {
+  if (!process.env.SESSION_SECRET) {
+    throw new Error("SESSION_SECRET is required");
+  }
+
+  await connectRedis();
+
+  /**
+   * Session cookies are required because OTP state is stored on the server side
+   * (`req.session.pending_otp`) in the current auth implementation.
+   */
+  app.use(
+    session({
+      secret: process.env.SESSION_SECRET,
+      resave: false,
+      saveUninitialized: false,
+      store: new RedisStore({
+        client: redisClient,
+        prefix: "http:sess:",
+      }),
+      cookie: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      },
+      name: "surelink.sid",
+    }),
+  );
+
+  // ================== ROUTES ==================
+  app.use("/api/auth", authRoutes);
+  app.use("/api/users", userRoutes);
+
+  // Health check
+  app.get("/", (req, res) => {
+    return res.status(200).json({
+      success: true,
+      message: "SureLink API is running.",
+    });
+  });
+
+  // ================== GLOBAL ERROR HANDLER ==================
+  app.use((err, req, res, next) => {
+    console.error(err);
+
+    return res.status(err.status || 500).json(
+      errorResponse({
+        message: err.message || "Internal Server Error",
+        code: err.code || "INTERNAL_ERROR",
+        details: err.details || null,
+      }),
+    );
+  });
+
+  await mongoose.connect(process.env.MONGO_URI);
+  console.log("✅ MongoDB connected");
+
+  server.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+  });
+}
+
+bootstrap().catch((error) => {
+  console.error("❌ Startup error:", error);
+  process.exit(1);
 });
