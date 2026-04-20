@@ -128,7 +128,6 @@ const userSchema = new Schema({
 
   // ---------- Security ----------
   security: {
-    failed_login_attempts: { type: Number, default: 0 },
     mfa_enabled: { type: Boolean, default: false },
   },
 

@@ -24,21 +24,6 @@ export class UserRepository {
   async create(payload) {
     return User.create(payload);
   }
-
-  /**
-   * Update audit fields related to login without mutating other user data.
-   */
-  async updateLastLogin(userId) {
-    return User.findByIdAndUpdate(
-      userId,
-      {
-        $set: {
-          "audit.last_login_at": new Date(),
-        },
-      },
-      { new: true },
-    );
-  }
 }
 
 export const userRepository = new UserRepository();

@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { AppError } from "../utils/errors.js";
+import { AppError } from "./errors.js";
 
 /**
  * UserFactory - Handles creation of user-related objects
@@ -61,17 +61,6 @@ export class UserFactory {
       type: user.type,
       status: user.status,
       name: user.name,
-    };
-  }
-
-  /**
-   * Create audit trail for user
-   */
-  static createAuditEntry(action, metadata = {}) {
-    return {
-      action,
-      timestamp: new Date(),
-      ...metadata,
     };
   }
 }
