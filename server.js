@@ -8,14 +8,13 @@ import { RedisStore } from "connect-redis";
 
 // Security
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
-import { errorResponse } from "./src/utils/apiResponse.js";
+import { errorResponse } from "./src/services/apiResponse.js";
 
 // Routes
-import authRoutes from "./src/modules/auth/auth.routes.js";
-import userRoutes from "./src/modules/users/user.routes.js";
+import authRoutes from "./src/services/auth.routes.js";
+import userRoutes from "./src/services/user.routes.js";
 import { initializeAuthEventHandlers } from "./src/services/authEvents.js";
-import { connectRedis, getRedisClient } from "./src/utils/redisClient.js";
+import { connectRedis, getRedisClient } from "./src/services/redisClient.js";
 
 // Socket (for future use)
 import { Server } from "socket.io";
@@ -63,23 +62,6 @@ app.use(
 
 // Security headers
 app.use(helmet());
-
-// Global rate limiting (auth endpoints also apply a stricter module limiter).
-const limiter = rateLimit({
-  max: 100,
-  windowMs: 15 * 60 * 1000, // 15 mins
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (req, res) => {
-    return res.status(429).json(
-      errorResponse({
-        message: "Too many requests. Please try again later.",
-        code: "RATE_LIMIT_EXCEEDED",
-      }),
-    );
-  },
-});
-app.use("/api", limiter);
 
 //=================== END OF MIDDLEWARE===========
 

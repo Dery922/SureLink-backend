@@ -1,4 +1,4 @@
-import { redisClient } from "../utils/redisClient.js";
+import { redisClient } from "../services/redisClient.js";
 
 /**
  * SessionRepository (Redis).

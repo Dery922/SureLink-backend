@@ -1,4 +1,4 @@
-import { AppError } from "../utils/errors.js";
+import { AppError } from "./errors.js";
 
 const ALLOWED_TYPES = new Set(["customer", "provider", "driver", "business"]);
 

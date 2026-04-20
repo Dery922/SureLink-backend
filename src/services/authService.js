@@ -1,11 +1,11 @@
-import { AppError } from "../utils/errors.js";
-import { isValidGhanaPhone, normalizeGhanaPhone } from "../utils/phone.js";
+import { AppError } from "./errors.js";
+import { isValidGhanaPhone, normalizeGhanaPhone } from "./phone.js";
 import { sessionRepository } from "../repositories/sessionRepository.js";
 import { userRepository } from "../repositories/userRepository.js";
 import { publishEvent } from "./eventBus.js";
-import { UserFactory } from "../factories/userFactory.js";
-import { SessionFactory } from "../factories/sessionFactory.js";
-import { OtpFactory } from "../factories/otpFactory.js";
+import { UserFactory } from "./userFactory.js";
+import { SessionFactory } from "./sessionFactory.js";
+import { OtpFactory } from "./otpFactory.js";
 
 /**
  * Auth service layer.
@@ -113,8 +113,6 @@ export async function registerOrLoginUser(payload) {
       created_at: new Date().toISOString(),
     });
   }
-
-  await userRepository.updateLastLogin(user._id);
 
   const session = await createSessionForUser({
     userId: user._id.toString(),

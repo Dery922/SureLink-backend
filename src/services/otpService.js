@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { AppError } from "../utils/errors.js";
+import { AppError } from "./errors.js";
 import { publishEvent } from "./eventBus.js";
 
 /**

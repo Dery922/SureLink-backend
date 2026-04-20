@@ -1,4 +1,4 @@
-import { AppError } from "../../utils/errors.js";
+import { AppError } from "../services/errors.js";
 
 function isBlank(value) {
   return value === undefined || value === null || String(value).trim() === "";

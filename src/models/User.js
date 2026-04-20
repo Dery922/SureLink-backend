@@ -123,7 +123,6 @@ const userSchema = new Schema({
 
   // ---------- Security ----------
   security: {
-    failed_login_attempts: { type: Number, default: 0 },
     mfa_enabled: { type: Boolean, default: false },
   },
 
@@ -144,13 +143,6 @@ const userSchema = new Schema({
       sms: { type: Boolean, default: true },
       push: { type: Boolean, default: true },
     },
-  },
-
-  // ---------- Audit ----------
-  audit: {
-    created_at: { type: Date, default: Date.now },
-    updated_at: Date,
-    last_login_at: Date,
   },
 
 }, { timestamps: true });
