@@ -1,7 +1,14 @@
-// models/User.js
 import mongoose from "mongoose";
 
 const { Schema } = mongoose;
+
+/**
+ * User model.
+ *
+ * This schema is intentionally broad to support multiple actor types
+ * (customer/provider/driver/business/admin). Keep auth-critical fields stable:
+ * `phone` (unique), `type`, and `verification.phone`.
+ */
 
 // ========== GEO SCHEMA ==========
 const pointSchema = new Schema({
@@ -13,6 +20,10 @@ const pointSchema = new Schema({
   coordinates: {
     type: [Number], // [lng, lat]
     index: "2dsphere",
+    validate:{               //validate coordinates
+      validator:v => v.length === 2,
+      message:"coordinates must be [lng, lat]"
+    }
   },
 }, { _id: false });
 
@@ -54,23 +65,24 @@ const userSchema = new Schema({
       verified: { type: Boolean, default: false },
       verified_at: Date,
     },
-    ghana_card: {
-      verified: { type: Boolean, default: false },
-      card_reference: String,
-      card_number_hashed: String,
-    },
+    // ghana_card: {
+    //   verified: { type: Boolean, default: false },
+    //   card_reference: String,
+    //   card_number_hashed: String,
+    // },
   },
 
   // ---------- Role ----------
-  type: {
-    type: String,
-    enum: ["customer", "provider", "driver", "business", "admin"],
-    default: "customer",
-  },
+  // type: {
+  //   type: String,
+  //   enum: ["customer", "provider", "driver", "business", "admin"],
+  //   default: "customer",
+  // },
 
-  roles: {
+  roles: {                   
     type: [String],
-    default: ["user"],
+    enum:["customer","provider","driver","business","admin"],
+    default: ["customer"],
   },
 
   // ---------- Provider ----------
@@ -146,6 +158,7 @@ const userSchema = new Schema({
     last_login_at: Date,
   },
 
-}, { timestamps: true });
+},
+  { timestamps: true });
 
 export default mongoose.model("User", userSchema);
