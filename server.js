@@ -12,10 +12,11 @@ import rateLimit from "express-rate-limit";
 import { errorResponse } from "./src/utils/apiResponse.js";
 
 // Routes
-import authRoutes from "./src/modules/auth/auth.routes.js";
-import userRoutes from "./src/modules/users/user.routes.js";
+import authRoutes from "./src/routes/auth.routes.js";
+import userRoutes from "./src/routes/user.routes.js";
 import { initializeAuthEventHandlers } from "./src/services/authEvents.js";
 import { connectRedis, getRedisClient } from "./src/utils/redisClient.js";
+import { registerContainerMiddleware } from "./src/containers/rbac.container.js";
 
 // Socket (for future use)
 import { Server } from "socket.io";
@@ -38,10 +39,14 @@ const app = express();
 const server = http.createServer(app);
 const redisClient = getRedisClient();
 
+// behind a reverse proxy (Render/NGINX/Cloudflare), this is required
+// for correct `req.ip` and secure cookies.
+app.set("trust proxy", 1);
+
 // ================== SOCKET.IO ==================
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: process.env.FRONTEND_URL || "http://localhost:3000",
   },
 });
 
@@ -124,6 +129,9 @@ async function bootstrap() {
       name: "surelink.sid",
     }),
   );
+
+  // Attach DI container per request (RBAC middleware depends on req.container).
+  app.use(registerContainerMiddleware());
 
   // ================== ROUTES ==================
   app.use("/api/auth", authRoutes);

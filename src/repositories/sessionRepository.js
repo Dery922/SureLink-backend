@@ -1,4 +1,4 @@
-import { redisClient } from "../utils/redisClient.js";
+import { getRedisClient } from "../utils/redisClient.js";
 
 /**
  * SessionRepository (Redis).
@@ -11,6 +11,10 @@ import { redisClient } from "../utils/redisClient.js";
  * `token_hash` is used instead of raw token so Redis never stores bearer tokens.
  */
 export class SessionRepository {
+  client() {
+    return getRedisClient();
+  }
+
   tokenKey(tokenHash) {
     return `auth:session:${tokenHash}`;
   }
@@ -25,6 +29,7 @@ export class SessionRepository {
    * Note: we clamp TTL to at least 1 second to avoid Redis rejecting EX=0.
    */
   async create(payload) {
+    const redisClient = this.client();
     const tokenKey = this.tokenKey(payload.token_hash);
     const userSetKey = this.userSetKey(payload.user_id);
     const ttlSeconds = Math.max(
@@ -59,6 +64,7 @@ export class SessionRepository {
    * Returns the stored JSON payload or null if missing/expired.
    */
   async findByTokenHash(tokenHash) {
+    const redisClient = this.client();
     const raw = await redisClient.get(this.tokenKey(tokenHash));
     if (!raw) return null;
     return JSON.parse(raw);
@@ -68,6 +74,7 @@ export class SessionRepository {
    * Delete a session key and remove it from the per-user set (best effort).
    */
   async deleteByTokenHash(tokenHash) {
+    const redisClient = this.client();
     const session = await this.findByTokenHash(tokenHash);
     await redisClient.del(this.tokenKey(tokenHash));
 
@@ -82,6 +89,7 @@ export class SessionRepository {
    * Returns the number of revoked sessions.
    */
   async deleteByUserId(userId) {
+    const redisClient = this.client();
     const userSetKey = this.userSetKey(userId);
     const tokenHashes = await redisClient.sMembers(userSetKey);
 

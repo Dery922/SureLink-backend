@@ -18,6 +18,10 @@ export class UserRepository {
     return User.findOne({ email });
   }
 
+  async findById(userId) {
+    return User.findById(userId);
+  }
+
   /**
    * Create a user document from a validated payload.
    */
