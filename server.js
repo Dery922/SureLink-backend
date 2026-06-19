@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 // server.js
 // 🔑 STEP 1: LOAD ENVIRONMENT VARIABLES IMMEDIATELY BEFORE ANY OTHER LOCAL IMPORTS
 import dotenv from "dotenv";
@@ -14,11 +15,22 @@ import cors from "cors";
 
 // ✅ NEW FIXED IMPORT: Explicitly import both wrappers!
 import { successResponse, errorResponse } from "./src/utils/apiResponse.js";
+=======
+import express from "express";
+import mongoose from "mongoose";
+import dotenv from "dotenv";
+import http from "http";
+import cors from "cors";
+import session from "express-session";
+import MongoStore from "connect-mongo";
+
+>>>>>>> 3ae27f9e11bc75efa9c289678af75e3bbb851246
 
 // Security
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 
+<<<<<<< HEAD
 // Socket
 import { Server } from "socket.io";
 
@@ -29,16 +41,31 @@ import { authMiddleware } from "./src/modules/auth/auth.validation.middleware.js
 import User from "./src/models/User.js";
 
 console.log("🔥🔥 SERVER ENTRY FILE LOADED");
+=======
+// Routes
+// import authRoutes from "./src/modules/auth/auth.routes.js";
+// import userRoutes from "./src/modules/users/user.routes.js";
+
+// Socket (for future use)
+import { Server } from "socket.io";
+
+dotenv.config();
+>>>>>>> 3ae27f9e11bc75efa9c289678af75e3bbb851246
 
 const app = express();
 const server = http.createServer(app);
 
+<<<<<<< HEAD
 // ================== SOCKET.IO ================== //
+=======
+// ================== SOCKET.IO ==================
+>>>>>>> 3ae27f9e11bc75efa9c289678af75e3bbb851246
 const io = new Server(server, {
   cors: {
     origin: "*",
   },
 });
+<<<<<<< HEAD
 app.set("io", io);
 
 // ================== GLOBAL MIDDLEWARES ==================
@@ -66,11 +93,55 @@ app.use(
 app.use(helmet());
 
 // Rate Limiting Security Layer
+=======
+
+//io is accessible in all routes/controllers
+app.set("io", io);
+
+// ================== MIDDLEWARE ==================
+app.use(express.json({ limit: "10kb" }));
+app.use(express.urlencoded({ extended: true }));
+
+// CORS
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    credentials: true, // Required for session cookies
+    optionsSuccessStatus: 200,
+  })
+);
+
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    store: MongoStore.create({
+      mongoUrl: process.env.MONGO_URI,
+      collectionName: "sessions",
+      ttl: 7 * 24 * 60 * 60, // 7 days
+    }),
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    },
+    name: "surelink.sid", 
+  })
+);
+
+// Security headers
+app.use(helmet());
+
+// Rate limiting (important for auth)
+>>>>>>> 3ae27f9e11bc75efa9c289678af75e3bbb851246
 const limiter = rateLimit({
   max: 100,
   windowMs: 15 * 60 * 1000, // 15 mins
   message: "Too many requests, please try again later.",
 });
+<<<<<<< HEAD
 app.use("/api/", limiter);
 
 // ================== FACEBOOK-STYLE AUTO LOGIN ENDPOINT ==================
@@ -132,3 +203,57 @@ bootstrap().catch((error) => {
   console.error("❌ Startup error:", error);
   process.exit(1);
 });
+=======
+app.use("/api", limiter);
+
+//=================== END OF MIDDLEWARE===========
+
+// ================== ROUTES ==================
+// app.use("/api/auth", authRoutes);
+// app.use("/api/users", userRoutes);
+
+// Health check
+app.get("/", (req, res) => {
+  res.send("🚀 LocalLink API is running...");
+});
+
+
+//==================== END OF ROUTES ======================
+
+// ================== GLOBAL ERROR HANDLER ==================
+app.use((err, req, res, next) => {
+  console.error(err);
+
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || "Internal Server Error",
+  });
+});
+
+//================= END OF GLOBAL ERROR HANDLE==============
+
+// ================== DATABASE ==================
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch((err) => {
+    console.error("❌ DB connection error:", err);
+    process.exit(1);
+  });
+
+// ================== SOCKET EVENTS ==================
+io.on("connection", (socket) => {
+  console.log("🔌 User connected:", socket.id);
+
+  socket.on("disconnect", () => {
+    console.log("❌ User disconnected:", socket.id);
+  });
+});
+
+// ================== START SERVER ==================
+const PORT = process.env.PORT || 8000;
+
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
+>>>>>>> 3ae27f9e11bc75efa9c289678af75e3bbb851246

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 node_modules
 
 node_modules/
@@ -6,3 +7,6 @@ dist/
 build/
 .yarn/
 
+=======
+.env
+>>>>>>> 3ae27f9e11bc75efa9c289678af75e3bbb851246
