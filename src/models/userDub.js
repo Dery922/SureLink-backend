@@ -1,4 +1,8 @@
-import mongoose from "mongoose";
+// models/User.js
+import { truncate } from "fs";
+import mongoose, { now } from "mongoose";
+import { type } from "os";
+
 const { Schema } = mongoose;
 
 // ========== GEO SCHEMA ==========
@@ -29,7 +33,7 @@ const userSchema = new Schema(
     },
     email: {
       type: String,
-      sparse: true,
+      sparse: true, // allows null but still unique
     },
 
     name: {
@@ -75,14 +79,17 @@ const userSchema = new Schema(
         type: Boolean,
         default: false,
       },
+      // 🔑 Tracks if the user completed the checkbox click step
       terms_accepted: {
         type: Boolean,
         default: false,
       },
+      // 🔑 Captures the precise timestamp of agreement
       terms_accepted_at: {
         type: Date,
         default: null,
       },
+      // 🔑 Crucial string tracker used by your controllers to remember where they left off
       current_step: {
         type: String,
         enum: [
@@ -90,9 +97,7 @@ const userSchema = new Schema(
           "terms_consent",
           "provider_profile",
           "provider_profile_verification",
-          "provider_profile_review", // 🎯 Normalized to match your frontend currentStep switches
-          "verification", // 🎯 Normalized to match your frontend currentStep switches
-          "review", // 🎯 Normalized to match your frontend currentStep switches
+          "provider_profile_review",
           "completed",
         ],
         default: "role_selection",
@@ -107,18 +112,9 @@ const userSchema = new Schema(
     // ---------- Provider ----------
     provider_profile: {
       category: String,
-      secondaryCategories: [String], // ✨ Added to catch extra service capabilities
-      service_area: String, // ✨ Added to store location strings like "East Legon"
-      service_radius_km: { type: Number, default: 25 },
-      bio: String, // ✨ Added to ensure your biographies do not vanish
-      avatar_url: String, // ✨ Added to track provider-specific image avatars
-      id_type: String,
-      id_number: String,
-      id_doc_url: String,
       experience_years: Number,
       hourly_rate: Number,
-      base_price: { type: Number, default: 0 },
-      open_for_work: { type: Boolean, default: true },
+      service_radius_km: Number,
     },
 
     // ---------- Driver ----------
