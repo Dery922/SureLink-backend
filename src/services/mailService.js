@@ -2,14 +2,29 @@ import nodemailer from "nodemailer";
 import { Resend } from "resend";
 
 export async function sendOtpEmail({ to, otp }) {
+  // const transporter = nodemailer.createTransport({
+  //   host: "smtp.gmail.com",
+  //   port: 465,
+  //   secure: false,
+  //   auth: {
+  //     user: String(process.env.EMAIL_USER).trim(),
+  //     pass: String(process.env.EMAIL_PASS).trim(),
+  //   },
+  // });
+
+  // Inside src/services/mailService.js
   const transporter = nodemailer.createTransport({
     host: "smtp.gmail.com",
     port: 465,
-    secure: false,
+    secure: true,
     auth: {
       user: String(process.env.EMAIL_USER).trim(),
       pass: String(process.env.EMAIL_PASS).trim(),
     },
+    // 🚀 THE INFRASTRUCTURE FIX: Force connection to use standard IPv4 addresses
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
   });
 
   await transporter.verify(); // 🔥 THIS WILL REVEAL REAL ISSUE IMMEDIATELY
