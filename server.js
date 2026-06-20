@@ -1,6 +1,7 @@
+import dotenv from "dotenv";
+dotenv.config();
 import express from "express";
 import mongoose from "mongoose";
-import dotenv from "dotenv";
 import http from "http";
 import cors from "cors";
 import session from "express-session";
@@ -16,8 +17,6 @@ import rateLimit from "express-rate-limit";
 
 // Socket (for future use)
 import { Server } from "socket.io";
-
-dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
