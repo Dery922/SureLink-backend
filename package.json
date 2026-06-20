@@ -17,10 +17,10 @@
     "nodemailer": "^8.0.7",
     "react-hot-toast": "^2.6.0",
     "redis": "^5.8.2",
+    "resend": "^6.14.0",
     "socket.io": "^4.8.1"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14",
     "connect-mongo": "^6.0.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
@@ -30,6 +30,7 @@
     "helmet": "^8.1.0",
     "http": "^0.0.1-security",
     "mongoose": "^9.4.1",
+    "nodemon": "^3.1.14",
     "socket.io": "^4.8.3"
   }
 }

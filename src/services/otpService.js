@@ -5,7 +5,6 @@ import Otp from "../models/Otp.js";
 
 import { sendOtpEmail } from "./mailService.js";
 
-
 const OTP_TTL_MS = 5 * 60 * 1000;
 const OTP_DIGITS = 6;
 
@@ -19,10 +18,8 @@ function hashOtp(otp) {
   return crypto.createHash("sha256").update(otp).digest("hex");
 }
 
-
-
 export async function issueOtp(payload) {
-  // Combine identifier verification 
+  // Combine identifier verification
   const targetIdentifier = payload.email || payload.phone;
   const otp = generateOtp();
 
@@ -55,16 +52,15 @@ export async function issueOtp(payload) {
   //   expiresAt,
   // });
 
-          // Inside your issueOtp service function:
-        publishEvent("auth.otp.requested", {
-          phone: payload.phone || null,
-          email: payload.email || null,
-          identifier: payload.email || payload.phone,
-          expires_in_seconds: OTP_TTL_MS / 1000,
-          expiresInSeconds: OTP_TTL_MS / 1000, // Safe fallback property shape
-          requestedAt: new Date().toISOString(),
-        });
-
+  // Inside your issueOtp service function:
+  publishEvent("auth.otp.requested", {
+    phone: payload.phone || null,
+    email: payload.email || null,
+    identifier: payload.email || payload.phone,
+    expires_in_seconds: OTP_TTL_MS / 1000,
+    expiresInSeconds: OTP_TTL_MS / 1000, // Safe fallback property shape
+    requestedAt: new Date().toISOString(),
+  });
 
   return {
     identifier: targetIdentifier,
@@ -83,7 +79,11 @@ export async function verifyOtp({ identifier, otp }) {
   // Security Fix 1: Check if too many attempts occurred before checking code match
   if (record.attempts <= 0) {
     await record.deleteOne();
-    throw new AppError("Too many failed attempts. Request a new OTP.", 429, "AUTH_OTP_ATTEMPTS_EXCEEDED");
+    throw new AppError(
+      "Too many failed attempts. Request a new OTP.",
+      429,
+      "AUTH_OTP_ATTEMPTS_EXCEEDED",
+    );
   }
 
   if (Date.now() > record.expiresAt) {
@@ -107,26 +107,6 @@ export async function verifyOtp({ identifier, otp }) {
 
   return { identifier };
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // const OTP_TTL_MS = 5 * 60 * 1000;
 // const OTP_DIGITS = 6;
