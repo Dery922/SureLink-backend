@@ -44,13 +44,14 @@ export async function issueOtp(payload) {
   console.log(`🔐 [RENDER LOG CHECK] THE GENERATED CODE IS: ${otp}`);
 
   // 🛡️ THE PRODUCTION SAFETY NET
+
+  // 🛡️ THE PRODUCTION SAFETY NET
   if (payload.email) {
     try {
-      console.log("⏳ Handshaking with Gmail SMTP servers via Port 465...");
+      console.log("⏳ Initiating secure web request to Brevo API..."); // FIXED LOG
       await sendOtpEmail({ to: payload.email, otp });
-      console.log("✅ Nodemailer successfully delivered email packet.");
+      console.log("✅ Brevo API successfully accepted the email packet."); // FIXED LOG
     } catch (emailError) {
-      // 🎯 This isolates the crash and prints the exact root problem in your Render terminal!
       console.error("❌ EMAIL SUBSYSTEM ERROR LOGGED:", emailError.message);
       console.log(
         "ℹ️ Bypassing connection crash so login flow continues safely.",
@@ -79,57 +80,6 @@ export async function issueOtp(payload) {
     otp_preview: otp,
   };
 }
-
-// export async function issueOtp(payload) {
-//   // Combine identifier verification
-//   const targetIdentifier = payload.email || payload.phone;
-//   const otp = generateOtp();
-
-//   // Clear existing active codes for this identifier
-//   await Otp.deleteMany({ identifier: targetIdentifier });
-
-//   const expiresAt = new Date(Date.now() + OTP_TTL_MS);
-
-//   await Otp.create({
-//     identifier: targetIdentifier,
-//     codeHash: hashOtp(otp),
-//     purpose: payload.type === "signup" ? "signup" : "login",
-//     expiresAt,
-//     attempts: 5, // Starts at 5 max attempts
-//   });
-
-//   console.log("📧 Sending OTP to:", targetIdentifier);
-//   if (process.env.NODE_ENV !== "production") {
-//     console.log("🔐 OTP generated (dev):", otp);
-//   }
-
-//   if (payload.email) {
-//     await sendOtpEmail({ to: payload.email, otp });
-//   } else if (payload.phone) {
-//     // SMS integration service goes here if needed later
-//   }
-
-//   // publishEvent("auth.otp.requested", {
-//   //   identifier: targetIdentifier,
-//   //   expiresAt,
-//   // });
-
-//   // Inside your issueOtp service function:
-//   publishEvent("auth.otp.requested", {
-//     phone: payload.phone || null,
-//     email: payload.email || null,
-//     identifier: payload.email || payload.phone,
-//     expires_in_seconds: OTP_TTL_MS / 1000,
-//     expiresInSeconds: OTP_TTL_MS / 1000, // Safe fallback property shape
-//     requestedAt: new Date().toISOString(),
-//   });
-
-//   return {
-//     identifier: targetIdentifier,
-//     expires_in_seconds: OTP_TTL_MS / 1000,
-//     otp_preview: process.env.NODE_ENV !== "production" ? otp : undefined,
-//   };
-// }
 
 export async function verifyOtp({ identifier, otp }) {
   const record = await Otp.findOne({ identifier });

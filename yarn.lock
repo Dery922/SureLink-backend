@@ -2,6 +2,11 @@
 # yarn lockfile v1
 
 
+"@getbrevo/brevo@^5.0.4":
+  version "5.0.4"
+  resolved "https://registry.yarnpkg.com/@getbrevo/brevo/-/brevo-5.0.4.tgz#d7878219cbb1cc95b077cfa06c8083af322993a7"
+  integrity sha512-wN4mHE6O0Pb/d/Dh3E4MAm2zCHbLLUcFF8/wgwTeMPy9KzHBYLu7S/nsJbzd0AWL09MHn8vwue8ULL9YOzluOQ==
+
 "@jas-/asn.1@>=5":
   version "5.4.2"
   resolved "https://registry.yarnpkg.com/@jas-/asn.1/-/asn.1-5.4.2.tgz#29da5547c1764692cb8de1d718ab77cfe561df9c"

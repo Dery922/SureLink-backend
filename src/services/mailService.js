@@ -1,51 +1,73 @@
 import nodemailer from "nodemailer";
-import { Resend } from "resend";
+import https from "https";
+import { BrevoClient } from "@getbrevo/brevo";
+
+// Initialize the client directly using your standard API key
+const brevo = new BrevoClient({
+  apiKey: process.env.BREVO_API_KEY,
+});
 
 export async function sendOtpEmail({ to, otp }) {
-  // const transporter = nodemailer.createTransport({
-  //   host: "smtp.gmail.com",
-  //   port: 465,
-  //   secure: false,
-  //   auth: {
-  //     user: String(process.env.EMAIL_USER).trim(),
-  //     pass: String(process.env.EMAIL_PASS).trim(),
-  //   },
-  // });
+  return new Promise((resolve, reject) => {
+    console.log(`📡 Sending email via Brevo REST API to: ${to}`);
 
-  // Inside src/services/mailService.js
-  const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 465,
-    secure: true,
-    auth: {
-      user: String(process.env.EMAIL_USER).trim(),
-      pass: String(process.env.EMAIL_PASS).trim(),
-    },
-    // 🚀 THE INFRASTRUCTURE FIX: Force connection to use standard IPv4 addresses
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 10000,
-  });
+    const payloadString = JSON.stringify({
+      sender: {
+        name: "surelink",
+        email: "franklindery922@gmail.com",
+      },
+      to: [
+        {
+          email: to,
+        },
+      ],
+      subject: "Your SureLink Verification Code",
+      htmlContent: `<h3>Your verification code is: <b>${otp}</b></h3>`,
+    });
 
-  await transporter.verify(); // 🔥 THIS WILL REVEAL REAL ISSUE IMMEDIATELY
+    const options = {
+      hostname: "api.brevo.com",
+      port: 443,
+      path: "/v3/smtp/email", // This still works for REST API
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "api-key": process.env.BREVO_API_KEY, // ✅ REST API key goes here
+        "content-type": "application/json",
+        "content-length": Buffer.byteLength(payloadString),
+      },
+    };
 
-  return transporter.sendMail({
-    from: `"SureLink" <${process.env.EMAIL_USER}>`,
-    to,
-    subject: "Your OTP Code",
-    html: `<h1>${otp}</h1>`,
+    const req = https.request(options, (res) => {
+      let dataBuffer = "";
+
+      res.on("data", (chunk) => {
+        dataBuffer += chunk;
+      });
+
+      res.on("end", () => {
+        console.log("📥 Response:", dataBuffer);
+
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          console.log("✅ Email sent successfully!");
+          resolve(JSON.parse(dataBuffer));
+        } else {
+          console.error("❌ Brevo API error:", dataBuffer);
+          reject(
+            new Error(
+              `Brevo rejected request with status ${res.statusCode}: ${dataBuffer}`,
+            ),
+          );
+        }
+      });
+    });
+
+    req.on("error", (networkError) => {
+      console.error("❌ Network error:", networkError.message);
+      reject(networkError);
+    });
+
+    req.write(payloadString);
+    req.end();
   });
 }
-
-// Initialize using your dashboard secret key variable
-// const resend = new Resend(process.env.RESEND_API_KEY);
-
-// export async function sendOtpEmail({ to, otp }) {
-//   // Bypasses Nodemailer and delivers via standard secure web requests!
-//   return resend.emails.send({
-//     from: "SureLink <onboarding@resend.dev>", // Replace with your domain when ready
-//     to: [to],
-//     subject: "Your OTP Code",
-//     html: `<h1>${otp}</h1>`,
-//   });
-// }
