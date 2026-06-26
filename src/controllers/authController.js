@@ -12,6 +12,7 @@ import {
 import { issueOtp, verifyOtp } from "../services/otpService.js";
 import jwt from "jsonwebtoken";
 import cloudinary from "../config/cloudinary.js";
+import locationService from "../services/locationService.js";
 
 export async function requestOtp(req, res, next) {
   try {
@@ -194,12 +195,88 @@ export async function saveProviderProfile(req, res, next) {
       });
     }
 
+    const clientIp =
+      req.headers["x-forwarded-for"] ||
+      req.connection.remoteAddress ||
+      req.socket.remoteAddress ||
+      req.ip;
+    console.log("This is req headers", req.headers);
+    console.log("connection remote address", req.connection.remoteAddress);
+    console.log("socket connection", req.socket.remoteAddress);
+    console.log("final ip address", req.ip);
+
+    // ✅ 1. Get location strictly from Backend IP Lookup
+    let finalCoordinates = [-0.186, 5.603]; // Default Fallback (e.g., Accra)
+    let accuracySource = "default-fallback";
+
+    const locationData = await locationService.getLocation(clientIp);
+    if (locationData && locationData.coordinates) {
+      finalCoordinates = locationData.coordinates;
+      accuracySource = locationData.accuracy || "ip-based";
+    }
+
+    // ✅ 2. Safely construct the GeoJSON schema object
+    const geoPoint = {
+      type: "Point",
+      coordinates: finalCoordinates, // [lng, lat]
+    };
+
+    // ✅ 3. Get address metadata from the resolved coordinates
+    let addressData = null;
+    if (finalCoordinates) {
+      addressData =
+        await locationService.getAddressFromCoords(finalCoordinates);
+    }
+
     const user = await User.findById(req.user.id);
     if (!user) {
       return res.status(404).json({
         success: false,
         message: "Provider profile not found in our database records.",
       });
+    }
+
+    // 🖼️ CLOUDINARY BASE64 COVER PICTURE CAPTURE & UPLOAD
+    if (
+      profileDetails.coverPicture &&
+      profileDetails.coverPicture.startsWith("data:image/")
+    ) {
+      try {
+        const coverUploadResponse = await cloudinary.uploader.upload(
+          profileDetails.coverPicture,
+          {
+            folder: "provider_covers",
+            transformation: [
+              // Landscape/Banner crop optimization for cover photos
+              { width: 1200, height: 400, crop: "fill", gravity: "center" },
+            ],
+          },
+        );
+
+        // Update the root-level reference if your schema tracks it there
+        user.coverPicture = {
+          url: coverUploadResponse.secure_url,
+          thumb: coverUploadResponse.secure_url.replace(
+            "/upload/",
+            "/upload/w_300,c_thumb/",
+          ),
+        };
+
+        // Sync it directly into your provider profile details block
+        user.provider_profile = {
+          ...user.provider_profile,
+          cover_picture: coverUploadResponse.secure_url,
+        };
+      } catch (coverUploadErr) {
+        console.error(
+          "Cloudinary Cover Asset Dispatch Failure:",
+          coverUploadErr,
+        );
+        return res.status(500).json({
+          success: false,
+          message: "Failed to upload cover banner picture to cloud storage.",
+        });
+      }
     }
 
     // 🚀 CLOUDINARY BASE64 ASSET CAPTURE & UPLOAD
@@ -211,23 +288,21 @@ export async function saveProviderProfile(req, res, next) {
         const uploadResponse = await cloudinary.uploader.upload(
           profileDetails.avatarUrl,
           {
-            folder: "provider_avatars", // Groups your image files neatly in Cloudinary
+            folder: "provider_avatars",
             transformation: [
               { width: 400, height: 400, crop: "fill", gravity: "face" },
-            ], // Auto crop & optimize for profiles
+            ],
           },
         );
 
-        // Map secure links back to your schema structures
         user.avatar = {
           url: uploadResponse.secure_url,
           thumb: uploadResponse.secure_url.replace(
             "/upload/",
             "/upload/w_150,c_thumb/",
-          ), // Fast thumbnail path interpolation
+          ),
         };
 
-        // Also sync it down into provider_profile object fields
         user.provider_profile = {
           ...user.provider_profile,
           avatar_url: uploadResponse.secure_url,
@@ -254,11 +329,50 @@ export async function saveProviderProfile(req, res, next) {
       };
     }
 
-    // Update steps
+    // Fallback strings for addressing
+    const fallbackArea =
+      addressData?.area || locationData?.city || profileDetails.area || "";
+    const fallbackCity = addressData?.city || locationData?.city || "Accra";
+    const fallbackStreet = addressData?.street || "";
+
+    // ✅ SAVE UNIFORM LOCATION DATA TO USER (Using backend geoPoint)
+    user.location = {
+      home_address: {
+        coordinates: geoPoint,
+        area: fallbackArea,
+        city: fallbackCity,
+        gps_code: profileDetails.gpsCode || "",
+        street: fallbackStreet,
+      },
+    };
+
+    // Always update business profile coordinates consistently as a GeoJSON object
+    user.business_profile = {
+      ...user.business_profile,
+      businessName:
+        req.body.businessNname || user.business_profile?.businessName || "",
+      address: {
+        coordinates: geoPoint,
+        area: fallbackArea,
+        city: fallbackCity,
+        gps_code: profileDetails.gpsCode || "",
+        street: fallbackStreet,
+      },
+    };
+
+    // ✅ Store location metadata for tracking
+    user._locationMetadata = {
+      ip: clientIp,
+      capturedAt: new Date(),
+      accuracy: accuracySource,
+      source: locationData?.source || "backend-iplocation",
+    };
+
+    // Update workflow steps
     user.type = "provider";
     user.onboarding.current_step = "completed";
     user.onboarding.completed = true;
-    user.onboarding.terms_accepted = profileDetails.consent || true;
+    user.onboarding.terms_accepted = profileDetails.consent ?? true;
     user.onboarding.terms_accepted_at = new Date();
     user.current_step = "completed";
     user.status = "verification_pending";
@@ -272,7 +386,10 @@ export async function saveProviderProfile(req, res, next) {
         : profileDetails.secondaryCategories ||
           user.provider_profile?.secondaryCategories ||
           [],
-      service_area: profileDetails.area || user.provider_profile?.service_area,
+      service_area:
+        profileDetails.area ||
+        user.provider_profile?.service_area ||
+        fallbackArea,
       service_radius_km:
         Number(profileDetails.radius) ||
         user.provider_profile?.service_radius_km ||
@@ -298,7 +415,7 @@ export async function saveProviderProfile(req, res, next) {
 
     await user.save();
 
-    // Sanitize user document so it matches your payload formatting layout perfectly
+    // Sanitize user document
     const sanitizedUser = formatUserPayload(user);
 
     return res.status(200).json({
@@ -306,6 +423,8 @@ export async function saveProviderProfile(req, res, next) {
       message: "Provider professional profile completed successfully.",
       data: {
         user: sanitizedUser,
+        location: locationData,
+        address: addressData,
       },
     });
   } catch (error) {
@@ -490,7 +609,6 @@ export function formatUserPayload(user) {
 
   const typeRole = user.type || user.role || "customer";
 
-  // Isolate first and last names from the database document fields securely
   const firstName = user.name?.first || user.firstName || "";
   const lastName = user.name?.last || user.lastName || "";
   const fullName =
@@ -510,7 +628,7 @@ export function formatUserPayload(user) {
     roles: user.roles || ["user"],
     status: user.status || "verification_pending",
 
-    // 🚀 THE BULLETPROOF NAME FIX: Provide BOTH root flat keys AND the nested name object wrapper!
+    // 🚀 NAME FIX
     first: firstName,
     last: lastName,
     full: fullName,
@@ -536,6 +654,35 @@ export function formatUserPayload(user) {
       terms_accepted: user.onboarding?.terms_accepted ?? false,
       current_step: user.onboarding?.current_step || "welcome",
     },
+
+    // ✅ Add location to response
+    location: {
+      home_address: {
+        coordinates: user.location?.home_address?.coordinates || [
+          -0.186, 5.603,
+        ],
+        area: user.location?.home_address?.area || "",
+        city: user.location?.home_address?.city || "Accra",
+        gps_code: user.location?.home_address?.gps_code || "",
+        street: user.location?.home_address?.street || "",
+      },
+    },
+
+    // ✅ Add business location for providers
+    business_profile: user.business_profile
+      ? {
+          ...user.business_profile,
+          address: {
+            coordinates: user.business_profile?.address?.coordinates || [
+              -0.186, 5.603,
+            ],
+            area: user.business_profile?.address?.area || "",
+            city: user.business_profile?.address?.city || "Accra",
+            gps_code: user.business_profile?.address?.gps_code || "",
+            street: user.business_profile?.address?.street || "",
+          },
+        }
+      : null,
 
     provider_profile: user.provider_profile || null,
     job: user.provider_profile?.category || "Not In Services",

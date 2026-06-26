@@ -44,6 +44,11 @@ const userSchema = new Schema(
       thumb: String,
       updated_at: Date,
     },
+    coverPicture: {
+      url: String,
+      thumb: String,
+      updated_at: Date,
+    },
 
     // ---------- Verification ----------
     verification: {
@@ -130,7 +135,7 @@ const userSchema = new Schema(
 
     // ---------- Business ----------
     business_profile: {
-      business_name: String,
+      businessName: String,
       address: {
         street: String,
         area: String,
@@ -168,6 +173,13 @@ const userSchema = new Schema(
         gps_code: String,
         coordinates: pointSchema,
       },
+    },
+
+    _locationMetadata: {
+      ip: String,
+      capturedAt: Date,
+      accuracy: String, // 'ip-based', 'frontend', 'default'
+      source: String, // 'geoip', 'ipapi', 'ipinfo', 'frontend'
     },
 
     // ---------- Preferences ----------
