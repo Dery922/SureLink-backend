@@ -11,6 +11,8 @@ import {
   saveProviderProfile,
   logoutUser,
   getMe,
+  getMarketplaceProviders,
+  getCurrentUser,
 } from "../../controllers/authController.js";
 import { errorResponse } from "../../utils/apiResponse.js";
 import {
@@ -44,5 +46,7 @@ router.post("/provider-profile", authMiddleware, saveProviderProfile);
 
 // 🔑 Add this line right here:
 router.post("/provider-profile/draft", authMiddleware, saveProviderDraft);
+router.get("/get/all/providers", authMiddleware, getMarketplaceProviders);
+router.get("/auth/me", authMiddleware, getCurrentUser);
 router.post("/logout", authMiddleware, logoutUser);
 export default router;

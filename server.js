@@ -7,6 +7,7 @@ import cors from "cors";
 import session from "express-session";
 import MongoStore from "connect-mongo";
 import authRoutes from "./src/modules/auth/auth.routes.js";
+import mainRoutes from "./src/modules/main/main.routes.js";
 // Security
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -85,6 +86,7 @@ app.use("/api/", limiter);
 // ================== APPLICATION ROUTES ==================
 // Ensure your authRoutes variable is imported and uncommented at the top
 app.use("/api/auth", authRoutes);
+app.use("/api", mainRoutes);
 
 // Root Endpoint / Health Check
 app.get("/", (req, res) => {
@@ -129,8 +131,10 @@ async function bootstrap() {
   await mongoose.connect(process.env.MONGO_URI);
   console.log("✅ MongoDB connected");
 
-  server.listen(PORT, () => {
-    console.log(`🚀 Server running cleanly on port ${PORT}`);
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(
+      `🚀 Server safely listening across local networks on port ${PORT}`,
+    );
   });
 }
 

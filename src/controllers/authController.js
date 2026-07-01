@@ -195,21 +195,33 @@ export async function saveProviderProfile(req, res, next) {
       });
     }
 
-    const clientIp =
-      req.headers["x-forwarded-for"] ||
-      req.connection.remoteAddress ||
-      req.socket.remoteAddress ||
+    let clientIp =
+      req.headers["cf-connecting-ip"] || // Cloudflare
+      req.headers["x-real-ip"] || // Nginx
+      req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || // Proxy
+      req.connection?.remoteAddress ||
+      req.socket?.remoteAddress ||
       req.ip;
-    console.log("This is req headers", req.headers);
-    console.log("connection remote address", req.connection.remoteAddress);
-    console.log("socket connection", req.socket.remoteAddress);
-    console.log("final ip address", req.ip);
+
+    // Clean IPv6 wrapper if present
+    if (clientIp && clientIp.includes("::ffff:")) {
+      clientIp = clientIp.split("::ffff:")[1];
+    }
+
+    // Remove port if present
+    if (clientIp && clientIp.includes(":")) {
+      clientIp = clientIp.split(":")[0];
+    }
+
+    console.log("🌐 Detected Client IP:", clientIp);
 
     // ✅ 1. Get location strictly from Backend IP Lookup
     let finalCoordinates = [-0.186, 5.603]; // Default Fallback (e.g., Accra)
     let accuracySource = "default-fallback";
 
     const locationData = await locationService.getLocation(clientIp);
+    console.log("📍 Location Data:", locationData);
+
     if (locationData && locationData.coordinates) {
       finalCoordinates = locationData.coordinates;
       accuracySource = locationData.accuracy || "ip-based";
@@ -688,3 +700,236 @@ export function formatUserPayload(user) {
     job: user.provider_profile?.category || "Not In Services",
   };
 }
+
+/**
+ * @desc    Fetch all onboarding-completed providers with optional category filters
+ * @route   GET /api/providers
+ * @access  Public
+ */
+export async function getMarketplaceProviders(req, res, next) {
+  try {
+    const { category, page = 1, limit = 4 } = req.query;
+
+    // 1. Build query filters sequentially
+    const query = {
+      type: "provider",
+      "onboarding.completed": true, // Only show providers who finished setup
+      status: { $in: ["active", "verification_pending"] }, // Adjust if you want to hide pending ones
+    };
+
+    // If a customer filters by category from the homepage categories section
+    if (category && category !== "all") {
+      query["provider_profile.category"] = category;
+    }
+
+    // 2. Execute paginated database queries
+    const skipAmount = (parseInt(page) - 1) * parseInt(limit);
+
+    const [providers, totalCount] = await Promise.all([
+      User.find(query)
+        .select("-security -verification -id_number -id_doc_url") // Protect sensitive metrics
+        .sort({ "trust.score": -1, createdAt: -1 }) // Sort top rated & newest first
+        .skip(skipAmount)
+        .limit(parseInt(limit))
+        .lean(), // Convert to plain JS objects for faster processing execution
+      User.countDocuments(query),
+    ]);
+
+    // 3. Dispatch response payload safely
+    return res.status(200).json({
+      success: true,
+      message: "Marketplace providers catalog retrieved successfully.",
+      pagination: {
+        total: totalCount,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(totalCount / limit),
+      },
+      data: providers, // This feeds directly into your React map layout loop
+    });
+  } catch (error) {
+    console.error("❌ Marketplace Providers Fetch Error:", error.message);
+    next(error);
+  }
+}
+
+// Get all providers with filters
+export const getAllProviders = async (req, res) => {
+  try {
+    const { category, city, status, page = 1, limit = 20 } = req.query;
+
+    const query = { status: "active" };
+
+    if (category) {
+      query["provider_profile.category"] = category;
+    }
+
+    if (city) {
+      query["location.home_address.area"] = { $regex: city, $options: "i" };
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [providers, total] = await Promise.all([
+      Provider.find(query)
+        .select("name avatar provider_profile trust location status")
+        .skip(skip)
+        .limit(parseInt(limit))
+        .sort({ "trust.average_rating": -1 }),
+      Provider.countDocuments(query),
+    ]);
+
+    res.json({
+      success: true,
+      data: providers,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching providers:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch providers",
+      error: error.message,
+    });
+  }
+};
+
+// Get single provider by ID with all data
+// backend/controllers/providerController.js
+export const getProviderById = async (req, res) => {
+  try {
+    // Extract the ID from the URL parameter
+    const { id } = req.params; // This gets the ID from /get/provider/:id
+
+    console.log("Fetching provider with ID:", id);
+
+    // Find the user by ID
+    const provider = await User.findById(id);
+
+    if (!provider) {
+      return res.status(404).json({
+        success: false,
+        message: "Provider not found",
+      });
+    }
+
+    // Return the provider data
+    return res.status(200).json({
+      success: true,
+      data: provider,
+    });
+  } catch (error) {
+    console.error("Error fetching provider:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch provider",
+    });
+  }
+};
+
+// backend/controllers/authController.js
+export const getCurrentUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    res.json({ success: true, data: user });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Get provider services
+export const getProviderServices = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const services = await Service.find({
+      providerId: id,
+      isActive: true,
+    }).select("-__v");
+
+    res.json({
+      success: true,
+      data: services,
+    });
+  } catch (error) {
+    console.error("Error fetching services:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch services",
+      error: error.message,
+    });
+  }
+};
+
+// Get provider reviews with pagination
+export const getProviderReviews = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [reviews, total] = await Promise.all([
+      Review.find({ providerId: id })
+        .select("-__v")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit)),
+      Review.countDocuments({ providerId: id }),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        reviews,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          hasMore: skip + reviews.length < total,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching reviews:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch reviews",
+      error: error.message,
+    });
+  }
+};
+
+// Get provider availability
+export const getProviderAvailability = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const availability = await Availability.findOne({ providerId: id });
+
+    if (!availability) {
+      return res.json({
+        success: true,
+        data: null,
+        message: "No availability schedule found",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: availability,
+    });
+  } catch (error) {
+    console.error("Error fetching availability:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch availability",
+      error: error.message,
+    });
+  }
+};
