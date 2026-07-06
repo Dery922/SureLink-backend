@@ -12,7 +12,10 @@ import {
 import { issueOtp, verifyOtp } from "../services/otpService.js";
 import jwt from "jsonwebtoken";
 import cloudinary from "../config/cloudinary.js";
+import Service from "../models/Service.js";
+
 import locationService from "../services/locationService.js";
+import profileOptimizationService from "../services/profileOptimizationService.js";
 
 export async function requestOtp(req, res, next) {
   try {
@@ -195,25 +198,36 @@ export async function saveProviderProfile(req, res, next) {
       });
     }
 
+    // Extract IP safely from upstream proxies
     let clientIp =
-      req.headers["cf-connecting-ip"] || // Cloudflare
-      req.headers["x-real-ip"] || // Nginx
-      req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || // Proxy
-      req.connection?.remoteAddress ||
-      req.socket?.remoteAddress ||
+      req.headers["cf-connecting-ip"] || // Cloudflare proxy
+      req.headers["true-client-ip"] || // Render/Cloudflare true client header
+      req.headers["x-real-ip"] || // Upstream proxy Nginx
+      req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
       req.ip;
 
-    // Clean IPv6 wrapper if present
+    console.log("📥 Raw Extracted Client IP:", clientIp);
+
+    // Clean IPv6-mapped IPv4 configurations safely (e.g., ::ffff:154.160.10.12)
     if (clientIp && clientIp.includes("::ffff:")) {
       clientIp = clientIp.split("::ffff:")[1];
     }
 
-    // Remove port if present
-    if (clientIp && clientIp.includes(":")) {
-      clientIp = clientIp.split(":")[0];
+    // Strip ports safely without destroying raw IPv6 blocks
+    if (clientIp) {
+      if (clientIp.startsWith("[") && clientIp.includes("]:")) {
+        // Formatted IPv6 with port: [2001:db8::1]:8080
+        clientIp = clientIp.split("]:")[0].replace("[", "");
+      } else if (clientIp.includes(".") && clientIp.includes(":")) {
+        // Standard IPv4 with port: 154.160.10.12:3000
+        // (Ensure it's an IPv4 with exactly one colon)
+        if (clientIp.split(":").length === 2) {
+          clientIp = clientIp.split(":")[0];
+        }
+      }
     }
 
-    console.log("🌐 Detected Client IP:", clientIp);
+    console.log("🌐 Final Sanitized Client IP:", clientIp);
 
     // ✅ 1. Get location strictly from Backend IP Lookup
     let finalCoordinates = [-0.186, 5.603]; // Default Fallback (e.g., Accra)
@@ -582,123 +596,86 @@ export async function logoutUser(req, res, next) {
 
 // 📄 Location: src/controllers/authController.js
 
+// export async function getMe(req, res, next) {
+//   try {
+//     // 1. Fetch user document from database using the verified token ID
+//     const user = await User.findById(req.user.id);
+
+//     if (!user) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "User account not found.",
+//       });
+//     }
+
+//     // 2. 🚀 THE ULTIMATE FIX: Cleanly sanitize using your global layout helper!
+//     // This forces Shape 2 to match the flat structure of Shape 1 perfectly
+//     const sanitizedUser = formatUserPayload(user);
+
+//     // 3. To maintain your specific client navbar badge mapping, inject 'job' onto the clean object
+//     sanitizedUser.job = user.provider_profile?.category || "Not In Services";
+
+//     console.log(sanitizedUser);
+//     return res.status(200).json({
+//       success: true,
+//       data: {
+//         user: sanitizedUser, // 🔥 Standardized signature matching your authentication paths
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Hydration route profile recovery error:", error);
+//     next(error);
+//   }
+// }
+
 export async function getMe(req, res, next) {
   try {
-    // 1. Fetch user document from database using the verified token ID
-    const user = await User.findById(req.user.id);
+    // 1. 🚀 CHANGE HERE: Use .toObject() or extract data clearly
+    const rawUserDoc = await User.findById(req.user.id);
 
-    if (!user) {
+    if (!rawUserDoc) {
       return res.status(404).json({
         success: false,
         message: "User account not found.",
       });
     }
 
-    // 2. 🚀 THE ULTIMATE FIX: Cleanly sanitize using your global layout helper!
-    // This forces Shape 2 to match the flat structure of Shape 1 perfectly
+    // Convert to a raw plain JS object so we can bypass Mongoose's strict schema block!
+    const user = rawUserDoc.toObject();
+
+    // 2. Now we can safely attach fields without Mongoose stripping them out!
+    if (user.type === "provider") {
+      const optimizationProfile =
+        await profileOptimizationService.getProviderOptimizationMatrix(user);
+      user.profileOptimization = {
+        score: optimizationProfile.score,
+        issuesList: optimizationProfile.warnings,
+      };
+    } else {
+      user.profileOptimization = { score: 100, issuesList: [] };
+    }
+
+    // 3. Pass the editable object directly to your payload utility
     const sanitizedUser = formatUserPayload(user);
 
-    // 3. To maintain your specific client navbar badge mapping, inject 'job' onto the clean object
+    // 4. Inject job badge mapping
     sanitizedUser.job = user.provider_profile?.category || "Not In Services";
 
-    console.log(sanitizedUser);
+    console.log(
+      "🔥 PROCESSED USER PAYLOAD:",
+      sanitizedUser.profileOptimization,
+    );
+
     return res.status(200).json({
       success: true,
       data: {
-        user: sanitizedUser, // 🔥 Standardized signature matching your authentication paths
+        user: sanitizedUser,
       },
     });
   } catch (error) {
     console.error("Hydration route profile recovery error:", error);
     next(error);
   }
-}
-
-// 📦 Utility to sanitize and structure the user packet for the frontend
-//this function is being call in the
-export function formatUserPayload(user) {
-  if (!user) return null;
-
-  const typeRole = user.type || user.role || "customer";
-
-  const firstName = user.name?.first || user.firstName || "";
-  const lastName = user.name?.last || user.lastName || "";
-  const fullName =
-    user.name?.full ||
-    user.fullName ||
-    `${firstName} ${lastName}`.trim() ||
-    "User Account";
-
-  return {
-    id: user._id,
-    _id: user._id,
-    email: user.email || "",
-    phone: user.phone || "",
-    identifier: user.email || user.phone || "",
-    type: typeRole,
-    role: typeRole,
-    roles: user.roles || ["user"],
-    status: user.status || "verification_pending",
-
-    // 🚀 NAME FIX
-    first: firstName,
-    last: lastName,
-    full: fullName,
-    display: user.name?.display || firstName || "User",
-
-    name: {
-      first: firstName,
-      last: lastName,
-      full: fullName,
-      display: user.name?.display || firstName || "User",
-    },
-
-    avatar: {
-      url: user.avatar?.url || user.provider_profile?.avatar_url || "",
-      thumb: user.avatar?.thumb || "",
-    },
-
-    completed: user.onboarding?.completed ?? user.completed ?? false,
-    current_step:
-      user.onboarding?.current_step || user.current_step || "welcome",
-    onboarding: {
-      completed: user.onboarding?.completed ?? user.completed ?? false,
-      terms_accepted: user.onboarding?.terms_accepted ?? false,
-      current_step: user.onboarding?.current_step || "welcome",
-    },
-
-    // ✅ Add location to response
-    location: {
-      home_address: {
-        coordinates: user.location?.home_address?.coordinates || [
-          -0.186, 5.603,
-        ],
-        area: user.location?.home_address?.area || "",
-        city: user.location?.home_address?.city || "Accra",
-        gps_code: user.location?.home_address?.gps_code || "",
-        street: user.location?.home_address?.street || "",
-      },
-    },
-
-    // ✅ Add business location for providers
-    business_profile: user.business_profile
-      ? {
-          ...user.business_profile,
-          address: {
-            coordinates: user.business_profile?.address?.coordinates || [
-              -0.186, 5.603,
-            ],
-            area: user.business_profile?.address?.area || "",
-            city: user.business_profile?.address?.city || "Accra",
-            gps_code: user.business_profile?.address?.gps_code || "",
-            street: user.business_profile?.address?.street || "",
-          },
-        }
-      : null,
-
-    provider_profile: user.provider_profile || null,
-    job: user.provider_profile?.category || "Not In Services",
-  };
 }
 
 /**
@@ -833,12 +810,48 @@ export const getProviderById = async (req, res) => {
 };
 
 // backend/controllers/authController.js
-export const getCurrentUser = async (req, res) => {
+// export const getCurrentUser = async (req, res) => {
+//   try {
+//     const user = await User.findById(req.user.id);
+//     res.json({ success: true, data: user });
+//   } catch (error) {
+//     res.status(500).json({ success: false, message: error.message });
+//   }
+// };
+
+export const getCurrentUser = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.id);
-    res.json({ success: true, data: user });
+    const userId = req.user.id; // derived from your authentication validation session token
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Account entity record not found.",
+      });
+    }
+
+    // Pass the live database user instance to resolve service metrics dynamically
+    const optimizationProfile =
+      await profileOptimizationService.getProviderOptimizationMatrix(user);
+
+    return res.status(200).json({
+      success: true,
+      message: "Dashboard analysis retrieved successfully.",
+      data: {
+        // ... include your existing performance data objects here (e.g. jobs, totals)
+        profileOptimization: {
+          score: optimizationProfile.score,
+          issuesList: optimizationProfile.warnings,
+        },
+      },
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error("Dashboard Metadata Compilation Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal system error occurred while generating profile tips.",
+    });
   }
 };
 
@@ -847,20 +860,36 @@ export const getProviderServices = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const services = await Service.find({
-      providerId: id,
-      isActive: true,
-    }).select("-__v");
+    console.log("📝 Testing query with field names:");
+    console.log("- provider_id:", id);
 
-    res.json({
+    // Test both field name possibilities
+    const services1 = await Service.find({ provider_id: id });
+    const services2 = await Service.find({ providerId: id });
+
+    console.log("✅ With provider_id:", services1.length);
+    console.log("✅ With providerId:", services2.length);
+
+    // Use the one that works
+    const services = services1.length > 0 ? services1 : services2;
+
+    // Filter active ones
+    const activeServices = services.filter((s) => s.is_active === true);
+
+    return res.json({
       success: true,
-      data: services,
+      data: activeServices,
+      count: activeServices.length,
+      debug: {
+        total: services.length,
+        active: activeServices.length,
+        fieldUsed: services1.length > 0 ? "provider_id" : "providerId",
+      },
     });
   } catch (error) {
-    console.error("Error fetching services:", error);
-    res.status(500).json({
+    console.error("❌ Error:", error);
+    return res.status(500).json({
       success: false,
-      message: "Failed to fetch services",
       error: error.message,
     });
   }
@@ -932,4 +961,100 @@ export const getProviderAvailability = async (req, res) => {
       error: error.message,
     });
   }
+};
+
+export const formatUserPayload = (user) => {
+  if (!user) return null;
+
+  const typeRole = user.type || user.role || "customer";
+
+  const firstName = user.name?.first || user.firstName || "";
+  const lastName = user.name?.last || user.lastName || "";
+  const fullName =
+    user.name?.full ||
+    user.fullName ||
+    `${firstName} ${lastName}`.trim() ||
+    "User Account";
+
+  return {
+    id: user._id,
+    _id: user._id,
+    email: user.email || "",
+    phone: user.phone || "",
+    identifier: user.email || user.phone || "",
+    type: typeRole,
+    role: typeRole,
+    roles: user.roles || ["user"],
+    status: user.status || "verification_pending",
+
+    // 🚀 NAME FIX
+    first: firstName,
+    last: lastName,
+    full: fullName,
+    display: user.name?.display || firstName || "User",
+
+    name: {
+      first: firstName,
+      last: lastName,
+      full: fullName,
+      display: user.name?.display || firstName || "User",
+    },
+
+    avatar: {
+      url: user.avatar?.url || user.provider_profile?.avatar_url || "",
+      thumb: user.avatar?.thumb || "",
+    },
+    coverPicture: {
+      url:
+        user.coverPicture?.url || user.provider_profile?.coverPicture_url || "",
+      thumb: user.coverPicture?.thumb || "",
+    },
+
+    completed: user.onboarding?.completed ?? user.completed ?? false,
+    current_step:
+      user.onboarding?.current_step || user.current_step || "welcome",
+    onboarding: {
+      completed: user.onboarding?.completed ?? user.completed ?? false,
+      terms_accepted: user.onboarding?.terms_accepted ?? false,
+      current_step: user.onboarding?.current_step || "welcome",
+    },
+
+    // ✅ Add location to response
+    location: {
+      home_address: {
+        coordinates: user.location?.home_address?.coordinates || [
+          -0.186, 5.603,
+        ],
+        area: user.location?.home_address?.area || "",
+        city: user.location?.home_address?.city || "Accra",
+        gps_code: user.location?.home_address?.gps_code || "",
+        street: user.location?.home_address?.street || "",
+      },
+    },
+
+    // ✅ Add business location for providers
+    business_profile: user.business_profile
+      ? {
+          ...user.business_profile,
+          address: {
+            coordinates: user.business_profile?.address?.coordinates || [
+              -0.186, 5.603,
+            ],
+            area: user.business_profile?.address?.area || "",
+            city: user.business_profile?.address?.city || "Accra",
+            gps_code: user.business_profile?.address?.gps_code || "",
+            street: user.business_profile?.address?.street || "",
+          },
+        }
+      : null,
+
+    provider_profile: user.provider_profile || null,
+    job: user.provider_profile?.category || "Not In Services",
+
+    // 🚀 THE FIX: Explicitly allow the optimization parameters to pass through the helper
+    profileOptimization: user.profileOptimization || {
+      score: 100,
+      issuesList: [],
+    },
+  };
 };

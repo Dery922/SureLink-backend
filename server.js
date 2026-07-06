@@ -31,7 +31,7 @@ const io = new Server(server, {
 app.set("io", io);
 
 // ================== GLOBAL MIDDLEWARES ==================
-app.set("trust proxy", 1);
+app.set("trust proxy", true);
 // 🔑 FIXED: Set to 10mb once globally so base64 pictures don't throw 413 errors
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
