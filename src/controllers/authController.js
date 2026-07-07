@@ -778,36 +778,36 @@ export const getAllProviders = async (req, res) => {
 
 // Get single provider by ID with all data
 // backend/controllers/providerController.js
-export const getProviderById = async (req, res) => {
-  try {
-    // Extract the ID from the URL parameter
-    const { id } = req.params; // This gets the ID from /get/provider/:id
+// export const getProviderById = async (req, res) => {
+//   try {
+//     // Extract the ID from the URL parameter
+//     const { id } = req.params; // This gets the ID from /get/provider/:id
 
-    console.log("Fetching provider with ID:", id);
+//     console.log("Fetching provider with ID:", id);
 
-    // Find the user by ID
-    const provider = await User.findById(id);
+//     // Find the user by ID
+//     const provider = await User.findById(id);
 
-    if (!provider) {
-      return res.status(404).json({
-        success: false,
-        message: "Provider not found",
-      });
-    }
+//     if (!provider) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Provider not found",
+//       });
+//     }
 
-    // Return the provider data
-    return res.status(200).json({
-      success: true,
-      data: provider,
-    });
-  } catch (error) {
-    console.error("Error fetching provider:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch provider",
-    });
-  }
-};
+//     // Return the provider data
+//     return res.status(200).json({
+//       success: true,
+//       data: provider,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching provider:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch provider",
+//     });
+//   }
+// };
 
 // backend/controllers/authController.js
 // export const getCurrentUser = async (req, res) => {

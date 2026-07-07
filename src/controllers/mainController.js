@@ -266,12 +266,14 @@ export const saveProviderServices = async (req, res) => {
         pricingModel: serviceData.pricingModel || "package",
         priceType: serviceData.priceType || "fixed",
         is_active: serviceData.isActive !== false,
-        tags: serviceData.tags
-          ? serviceData.tags
-              .split(",")
-              .map((t) => t.trim())
-              .filter(Boolean)
-          : [],
+        tags: Array.isArray(serviceData.tags)
+          ? serviceData.tags.map((t) => t.trim()).filter(Boolean)
+          : typeof serviceData.tags === "string" && serviceData.tags
+            ? serviceData.tags
+                .split(",")
+                .map((t) => t.trim())
+                .filter(Boolean)
+            : [],
         imageUrl: serviceData.imageUrl || "",
       };
 
@@ -347,6 +349,112 @@ export const saveProviderServices = async (req, res) => {
     });
   }
 };
+
+export const getProviderById = async (req, res) => {
+  try {
+    // Extract the ID from the URL parameter
+    const { id } = req.params; // This gets the ID from /get/provider/:id
+
+    console.log("Fetching provider with ID:", id);
+
+    // Find the user by ID
+    const provider = await User.findById(id);
+
+    if (!provider) {
+      return res.status(404).json({
+        success: false,
+        message: "Provider not found",
+      });
+    }
+
+    // Return the provider data
+    return res.status(200).json({
+      success: true,
+      data: provider,
+    });
+  } catch (error) {
+    console.error("Error fetching provider:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch provider",
+    });
+  }
+};
+
+// export const getProviderById = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+
+//     console.log("Fetching provider with ID:", id);
+
+//     // Find the user by ID and populate services and gallery
+//     const provider = await User.findById(id)
+//       .populate({
+//         path: "services",
+//         match: { is_active: true }, // Only get active services
+//         select: "-__v", // Exclude version field
+//         options: { sort: { createdAt: -1 } }, // Sort by newest first
+//       })
+//       .populate({
+//         path: "gallery",
+//         select: "-__v",
+//         options: { sort: { createdAt: -1 } },
+//       })
+//       .select("-password -__v"); // Exclude sensitive fields
+
+//     if (!provider) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Provider not found",
+//       });
+//     }
+
+//     // Transform the data to include counts and summaries
+//     const providerData = provider.toObject();
+
+//     // Add additional computed fields
+//     providerData._meta = {
+//       servicesCount: providerData.services?.length || 0,
+//       galleryCount: providerData.gallery?.length || 0,
+//       activeServices:
+//         providerData.services?.filter((s) => s.is_active !== false)?.length ||
+//         0,
+//     };
+
+//     // Calculate price range if services exist
+//     if (providerData.services && providerData.services.length > 0) {
+//       const prices = providerData.services
+//         .filter((s) => s.basePrice || s.price)
+//         .map((s) => s.basePrice || s.price || 0);
+
+//       if (prices.length > 0) {
+//         providerData._meta.priceRange = {
+//           min: Math.min(...prices),
+//           max: Math.max(...prices),
+//         };
+//       }
+//     }
+
+//     console.log(
+//       `✅ Provider found: ${providerData.name?.full || providerData.name}`,
+//     );
+//     console.log(
+//       `📊 Services: ${providerData._meta.servicesCount}, Gallery: ${providerData._meta.galleryCount}`,
+//     );
+
+//     return res.status(200).json({
+//       success: true,
+//       data: providerData,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching provider:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch provider",
+//       error: error.message,
+//     });
+//   }
+// };
 
 // Get all services for a provider
 export const getProviderServices = async (req, res) => {

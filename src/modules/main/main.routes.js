@@ -3,13 +3,13 @@ import { authMiddleware } from "../auth/auth.validation.middleware.js";
 import { upload } from "../../middleware/uploadMiddlware.js";
 import {
   getMarketplaceProviders,
-  getProviderById,
   getProviderServices,
 } from "../../controllers/authController.js";
 import {
   saveProviderServices,
   uploadGalleryImages,
   getGalleryByUserId,
+  getProviderById,
 } from "../../controllers/mainController.js";
 
 const router = Router();
