@@ -14,6 +14,10 @@ import { errorResponse } from "./src/services/apiResponse.js";
 import authRoutes from "./src/services/auth.routes.js";
 import userRoutes from "./src/services/user.routes.js";
 import { initializeAuthEventHandlers } from "./src/services/authEvents.js";
+
+// Admin module
+import adminAuthRoutes from "./src/admin/routes/adminAuth.routes.js";
+import { initializeAdminEventHandlers } from "./src/admin/events/adminEvents.js";
 import { connectRedis, getRedisClient } from "./src/services/redisClient.js";
 
 // Socket (for future use)
@@ -32,6 +36,7 @@ import { Server } from "socket.io";
  */
 dotenv.config();
 initializeAuthEventHandlers();
+initializeAdminEventHandlers();
 
 const app = express();
 const server = http.createServer(app);
@@ -110,6 +115,9 @@ async function bootstrap() {
   // ================== ROUTES ==================
   app.use("/api/auth", authRoutes);
   app.use("/api/users", userRoutes);
+
+  // Admin module
+  app.use("/api/admin/auth", adminAuthRoutes);
 
   // Health check
   app.get("/", (req, res) => {
