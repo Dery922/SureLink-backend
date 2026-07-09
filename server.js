@@ -17,6 +17,11 @@ import { initializeAuthEventHandlers } from "./src/services/authEvents.js";
 
 // Admin module
 import adminAuthRoutes from "./src/admin/routes/adminAuth.routes.js";
+import adminProvidersRoutes from "./src/admin/routes/providers.routes.js";
+import adminOperationsRoutes from "./src/admin/routes/operations.routes.js";
+import adminManagementRoutes from "./src/admin/routes/adminManagement.routes.js";
+import adminSettingsRoutes from "./src/admin/routes/settings.routes.js";
+import adminDashboardRoutes from "./src/admin/routes/dashboard.routes.js";
 import { initializeAdminEventHandlers } from "./src/admin/events/adminEvents.js";
 import { connectRedis, getRedisClient } from "./src/services/redisClient.js";
 
@@ -59,7 +64,9 @@ app.use(express.urlencoded({ extended: true }));
 // CORS
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: process.env.ALLOWED_ORIGINS
+      ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+      : [process.env.FRONTEND_URL || "http://localhost:3000", "http://localhost:5173"],
     credentials: true, // Required for session cookies
     optionsSuccessStatus: 200,
   })
@@ -118,6 +125,11 @@ async function bootstrap() {
 
   // Admin module
   app.use("/api/admin/auth", adminAuthRoutes);
+  app.use("/api/admin/providers", adminProvidersRoutes);
+  app.use("/api/admin/operations", adminOperationsRoutes);
+  app.use("/api/admin/admins", adminManagementRoutes);
+  app.use("/api/admin/settings", adminSettingsRoutes);
+  app.use("/api/admin/dashboard", adminDashboardRoutes);
 
   // Health check
   app.get("/", (req, res) => {
