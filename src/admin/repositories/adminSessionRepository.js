@@ -75,6 +75,69 @@ export class AdminSessionRepository {
     }
   }
 
+  // ─────────────────────────────────────────────────────────
+  // OTP pending state
+  // Key layout:
+  //   auth:admin:otp:<pending_token_hash>  → { admin_id, otp_hash, attempts, created_at }
+  //   auth:admin:pending:<admin_id>        → pending_token_hash  (reverse index)
+  // Both expire after OTP_PENDING_TTL_SECONDS.
+  // ─────────────────────────────────────────────────────────
+
+  static get OTP_PENDING_TTL() { return 10 * 60; } // 10 minutes
+
+  otpKey(pendingTokenHash) {
+    return `auth:admin:otp:${pendingTokenHash}`;
+  }
+
+  pendingIndexKey(adminId) {
+    return `auth:admin:pending:${adminId}`;
+  }
+
+  /** Store OTP pending record + reverse index. */
+  async createOtpPending({ adminId, pendingTokenHash, otpHash }) {
+    const ttl = AdminSessionRepository.OTP_PENDING_TTL;
+    await Promise.all([
+      redisClient.set(
+        this.otpKey(pendingTokenHash),
+        JSON.stringify({
+          admin_id: String(adminId),
+          otp_hash: otpHash,
+          attempts: 0,
+          created_at: new Date().toISOString(),
+        }),
+        { EX: ttl },
+      ),
+      redisClient.set(this.pendingIndexKey(adminId), pendingTokenHash, { EX: ttl }),
+    ]);
+  }
+
+  /** Look up an OTP pending record by pending token hash. */
+  async findOtpPending(pendingTokenHash) {
+    const raw = await redisClient.get(this.otpKey(pendingTokenHash));
+    return raw ? JSON.parse(raw) : null;
+  }
+
+  /** Check if an admin already has a pending OTP in flight. */
+  async findExistingPending(adminId) {
+    return redisClient.get(this.pendingIndexKey(adminId));
+  }
+
+  /** Delete both the OTP record and the reverse index atomically. */
+  async deleteOtpPending(pendingTokenHash, adminId) {
+    await Promise.all([
+      redisClient.del(this.otpKey(pendingTokenHash)),
+      redisClient.del(this.pendingIndexKey(adminId)),
+    ]);
+  }
+
+  /** Persist updated attempts count, preserving remaining TTL. */
+  async updateOtpAttempts(pendingTokenHash, data) {
+    const ttl = await redisClient.ttl(this.otpKey(pendingTokenHash));
+    if (ttl <= 0) return null;
+    await redisClient.set(this.otpKey(pendingTokenHash), JSON.stringify(data), { EX: ttl });
+    return data;
+  }
+
   /**
    * Delete all sessions for an admin (logout-all).
    *

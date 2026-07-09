@@ -130,6 +130,7 @@ export class AdminFactory {
       role: admin.role,
       status: admin.status,
       last_login_at: admin.last_login_at,
+      locked_until: admin.locked_until || null,
     };
   }
 }

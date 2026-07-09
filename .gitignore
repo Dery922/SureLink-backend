@@ -1,3 +1,14 @@
+# Environment secrets — never commit
 .env
+.env.local
+.env.*.local
+
+# Dependencies
 node_modules/
-.env.example
+
+# Hidden tool directories (AI assistants, editors, etc.)
+.*/
+
+# Keep these dot files tracked
+!.gitignore
+!.env.example
