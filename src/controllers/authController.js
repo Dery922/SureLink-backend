@@ -1,5 +1,5 @@
-import { AppError } from "../utils/errors.js";
-import { successResponse } from "../utils/apiResponse.js";
+import { AppError } from "../services/errors.js";
+import { successResponse } from "../services/apiResponse.js";
 import {
   logoutAllSessions,
   logoutSession,

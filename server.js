@@ -8,14 +8,22 @@ import { RedisStore } from "connect-redis";
 
 // Security
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
-import { errorResponse } from "./src/utils/apiResponse.js";
+import { errorResponse } from "./src/services/apiResponse.js";
 
 // Routes
-import authRoutes from "./src/modules/auth/auth.routes.js";
-import userRoutes from "./src/modules/users/user.routes.js";
+import authRoutes from "./src/services/auth.routes.js";
+import userRoutes from "./src/services/user.routes.js";
 import { initializeAuthEventHandlers } from "./src/services/authEvents.js";
-import { connectRedis, getRedisClient } from "./src/utils/redisClient.js";
+
+// Admin module
+import adminAuthRoutes from "./src/admin/routes/adminAuth.routes.js";
+import adminProvidersRoutes from "./src/admin/routes/providers.routes.js";
+import adminOperationsRoutes from "./src/admin/routes/operations.routes.js";
+import adminManagementRoutes from "./src/admin/routes/adminManagement.routes.js";
+import adminSettingsRoutes from "./src/admin/routes/settings.routes.js";
+import adminDashboardRoutes from "./src/admin/routes/dashboard.routes.js";
+import { initializeAdminEventHandlers } from "./src/admin/events/adminEvents.js";
+import { connectRedis, getRedisClient } from "./src/services/redisClient.js";
 
 // Socket (for future use)
 import { Server } from "socket.io";
@@ -33,6 +41,7 @@ import { Server } from "socket.io";
  */
 dotenv.config();
 initializeAuthEventHandlers();
+initializeAdminEventHandlers();
 
 const app = express();
 const server = http.createServer(app);
@@ -55,7 +64,9 @@ app.use(express.urlencoded({ extended: true }));
 // CORS
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: process.env.ALLOWED_ORIGINS
+      ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+      : [process.env.FRONTEND_URL || "http://localhost:3000", "http://localhost:5173"],
     credentials: true, // Required for session cookies
     optionsSuccessStatus: 200,
   })
@@ -63,23 +74,6 @@ app.use(
 
 // Security headers
 app.use(helmet());
-
-// Global rate limiting (auth endpoints also apply a stricter module limiter).
-const limiter = rateLimit({
-  max: 100,
-  windowMs: 15 * 60 * 1000, // 15 mins
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (req, res) => {
-    return res.status(429).json(
-      errorResponse({
-        message: "Too many requests. Please try again later.",
-        code: "RATE_LIMIT_EXCEEDED",
-      }),
-    );
-  },
-});
-app.use("/api", limiter);
 
 //=================== END OF MIDDLEWARE===========
 
@@ -128,6 +122,14 @@ async function bootstrap() {
   // ================== ROUTES ==================
   app.use("/api/auth", authRoutes);
   app.use("/api/users", userRoutes);
+
+  // Admin module
+  app.use("/api/admin/auth", adminAuthRoutes);
+  app.use("/api/admin/providers", adminProvidersRoutes);
+  app.use("/api/admin/operations", adminOperationsRoutes);
+  app.use("/api/admin/admins", adminManagementRoutes);
+  app.use("/api/admin/settings", adminSettingsRoutes);
+  app.use("/api/admin/dashboard", adminDashboardRoutes);
 
   // Health check
   app.get("/", (req, res) => {
