@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 dotenv.config();
-import express from "express";
+import express, { application } from "express";
 import mongoose from "mongoose";
 import http from "http";
 import cors from "cors";
@@ -8,6 +8,7 @@ import session from "express-session";
 import MongoStore from "connect-mongo";
 import authRoutes from "./src/modules/auth/auth.routes.js";
 import mainRoutes from "./src/modules/main/main.routes.js";
+import bookingRoutes from "./src/modules/bookingRoutes.js";
 // Security
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -31,7 +32,7 @@ const io = new Server(server, {
 app.set("io", io);
 
 // ================== GLOBAL MIDDLEWARES ==================
-app.set("trust proxy", true);
+app.set("trust proxy", false);
 // 🔑 FIXED: Set to 10mb once globally so base64 pictures don't throw 413 errors
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
@@ -87,6 +88,7 @@ app.use("/api/", limiter);
 // Ensure your authRoutes variable is imported and uncommented at the top
 app.use("/api/auth", authRoutes);
 app.use("/api", mainRoutes);
+app.use("/api", bookingRoutes);
 
 // Root Endpoint / Health Check
 app.get("/", (req, res) => {
@@ -128,7 +130,10 @@ async function bootstrap() {
     throw new Error("Missing MONGO_URI environment variable");
   }
 
-  await mongoose.connect(process.env.MONGO_URI);
+  await mongoose.connect(process.env.MONGO_URI, {
+    // Force Mongoose to throw a real error if a query takes longer than 5 seconds
+    serverSelectionTimeoutMS: 5000,
+  });
   console.log("✅ MongoDB connected");
 
   app.listen(PORT, "0.0.0.0", () => {

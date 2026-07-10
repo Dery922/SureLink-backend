@@ -22,6 +22,7 @@ export async function requestOtp(req, res, next) {
     const payload = await prepareOtpPayload(req.body);
 
     const otpResult = await issueOtp(payload);
+    console.log(otpResult, "Loggin OTP Result");
 
     const purpose = payload.existingUser ? "login" : "signup";
 
@@ -861,13 +862,13 @@ export const getProviderServices = async (req, res) => {
     const { id } = req.params;
 
     console.log("📝 Testing query with field names:");
-    console.log("- provider_id:", id);
+    console.log("- providerId:", id);
 
     // Test both field name possibilities
-    const services1 = await Service.find({ provider_id: id });
+    const services1 = await Service.find({ providerId: id });
     const services2 = await Service.find({ providerId: id });
 
-    console.log("✅ With provider_id:", services1.length);
+    console.log("✅ With providerId:", services1.length);
     console.log("✅ With providerId:", services2.length);
 
     // Use the one that works
@@ -883,7 +884,7 @@ export const getProviderServices = async (req, res) => {
       debug: {
         total: services.length,
         active: activeServices.length,
-        fieldUsed: services1.length > 0 ? "provider_id" : "providerId",
+        fieldUsed: services1.length > 0 ? "providerId" : "providerId",
       },
     });
   } catch (error) {

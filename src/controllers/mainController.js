@@ -240,12 +240,12 @@ export const saveProviderServices = async (req, res) => {
     // Delete services that are no longer in the list
     if (serviceIds.length > 0) {
       await Service.deleteMany({
-        provider_id: userId,
+        providerId: userId,
         _id: { $nin: serviceIds },
       });
     } else {
       // If no service IDs provided, delete all services for this provider
-      await Service.deleteMany({ provider_id: userId });
+      await Service.deleteMany({ providerId: userId });
     }
 
     // Process each service (create or update)
@@ -306,7 +306,7 @@ export const saveProviderServices = async (req, res) => {
         service = await Service.findOneAndUpdate(
           {
             _id: serviceData._id,
-            provider_id: userId,
+            providerId: userId,
           },
           servicePayload,
           { new: true, runValidators: true },
@@ -315,7 +315,7 @@ export const saveProviderServices = async (req, res) => {
         if (!service) {
           // If service not found, create it as new
           service = new Service({
-            provider_id: userId,
+            providerId: userId,
             ...servicePayload,
           });
           await service.save();
@@ -323,7 +323,7 @@ export const saveProviderServices = async (req, res) => {
       } else {
         // Create new service
         service = new Service({
-          provider_id: userId,
+          providerId: userId,
           ...servicePayload,
         });
         await service.save();
@@ -352,31 +352,45 @@ export const saveProviderServices = async (req, res) => {
 
 export const getProviderById = async (req, res) => {
   try {
-    // Extract the ID from the URL parameter
-    const { id } = req.params; // This gets the ID from /get/provider/:id
+    const { id } = req.params;
 
-    console.log("Fetching provider with ID:", id);
+    // 1. Run database queries concurrently for maximum efficiency
+    const [provider, services, gallery] = await Promise.all([
+      User.findOne({ _id: id, type: "provider" }).select("-security"), // Exclude sensitive security data
+      Service.find({ providerId: id, is_active: true }), // Fetch only active services
+      Gallery.find({ providerId: id }).sort({ createdAt: -1 }), // Fetch gallery items (newest first)
+    ]);
 
-    // Find the user by ID
-    const provider = await User.findById(id);
-
+    // 2. Validate provider existence and role type
     if (!provider) {
       return res.status(404).json({
         success: false,
-        message: "Provider not found",
+        message: "Provider profile not found.",
       });
     }
 
-    // Return the provider data
+    // 3. Return the consolidated provider profile package
     return res.status(200).json({
       success: true,
-      data: provider,
+      data: {
+        provider,
+        services,
+        gallery,
+      },
     });
   } catch (error) {
-    console.error("Error fetching provider:", error);
+    // 4. Catch invalid MongoDB ObjectIds or unexpected errors
+    if (error.name === "CastError") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid provider ID format.",
+      });
+    }
+
     return res.status(500).json({
       success: false,
-      message: "Failed to fetch provider",
+      message: "An internal server error occurred while fetching the provider.",
+      error: error.message,
     });
   }
 };
@@ -477,7 +491,7 @@ export const getProviderServices = async (req, res) => {
       });
     }
 
-    const services = await Service.find({ provider_id: userId }).sort({
+    const services = await Service.find({ providerId: userId }).sort({
       createdAt: -1,
     });
 
@@ -544,7 +558,7 @@ export const addProviderService = async (req, res) => {
 
     // Create new service
     const newService = new Service({
-      provider_id: userId,
+      providerId: userId,
       name: serviceData.name.trim(),
       description: serviceData.description?.trim() || "",
       category: serviceData.category.trim(),
@@ -617,7 +631,7 @@ export const updateProviderService = async (req, res) => {
     const service = await Service.findOneAndUpdate(
       {
         _id: serviceId,
-        provider_id: userId,
+        providerId: userId,
       },
       {
         name: updateData.name?.trim(),
@@ -679,7 +693,7 @@ export const deleteProviderService = async (req, res) => {
     // Find and delete the service
     const service = await Service.findOneAndDelete({
       _id: serviceId,
-      provider_id: userId,
+      providerId: userId,
     });
 
     if (!service) {
@@ -738,7 +752,7 @@ export const toggleServiceStatus = async (req, res) => {
     const service = await Service.findOneAndUpdate(
       {
         _id: serviceId,
-        provider_id: userId,
+        providerId: userId,
       },
       {
         is_active: isActive,
@@ -790,7 +804,7 @@ export const getServiceStats = async (req, res) => {
       });
     }
 
-    const services = await Service.find({ provider_id: userId });
+    const services = await Service.find({ providerId: userId });
     const totalServices = services.length;
     const activeServices = services.filter((s) => s.is_active).length;
     const inactiveServices = totalServices - activeServices;
