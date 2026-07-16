@@ -5,163 +5,259 @@ import Service from "../models/Service.js";
 import mongoose from "mongoose";
 
 // ===================== CREATE BOOKING =====================
-// backend/controllers/bookingController.js
-
-// ===================== CREATE BOOKING =====================
-// backend/controllers/bookingController.js
-
 export const createBooking = async (req, res) => {
   try {
-    const bookingData = req.body;
-    const customerId = req.user?._id || req.user?.id;
+    console.log(
+      "📝 Creating booking with data:",
+      JSON.stringify(req.body, null, 2),
+    );
 
+    const {
+      providerId,
+      providerName,
+      serviceId,
+      serviceName,
+      servicePrice,
+      serviceDuration,
+      serviceCategory,
+      serviceTypes,
+      date,
+      time,
+      address,
+      city,
+      landmark,
+      paymentMethod,
+      specialInstructions,
+      customerName,
+      totalAmount,
+      depositAmount,
+    } = req.body;
+
+    const customerId = req.user?._id || req.user?.id;
+    console.log("👤 Customer ID from token:", customerId);
+    console.log("👤 Full user object:", req.user);
+
+    // ===================== VALIDATION =====================
+    // Check authentication
     if (!customerId) {
-      return res
-        .status(401)
-        .json({ success: false, message: "User not authenticated" });
+      console.log("❌ No customer ID found in token");
+      return res.status(401).json({
+        success: false,
+        message: "User not authenticated",
+      });
     }
 
-    // 1. Parallel Fetching: Get Customer, Provider, and Service at once
-    const [customer, provider, service] = await Promise.all([
-      User.findById(customerId).lean(),
-      User.findById(bookingData.providerId).lean(),
-      Service.findById(bookingData.serviceId).lean(),
-    ]);
+    // Check required fields
+    const requiredFields = [
+      { field: providerId, name: "providerId" },
+      { field: serviceId, name: "serviceId" },
+      { field: date, name: "date" },
+      { field: time, name: "time" },
+      { field: address, name: "address" },
+      { field: city, name: "city" },
+    ];
 
-    // 2. Clear, structural checks
-    if (!customer)
-      return res
-        .status(404)
-        .json({ success: false, message: "Customer not found" });
-    if (!provider)
-      return res
-        .status(404)
-        .json({ success: false, message: "Provider not found" });
-    if (!service)
-      return res
-        .status(404)
-        .json({ success: false, message: "Service not found" });
+    for (const { field, name } of requiredFields) {
+      if (!field) {
+        console.log(`❌ Missing required field: ${name}`);
+        return res.status(400).json({
+          success: false,
+          message: `${name} is required`,
+        });
+      }
+    }
 
-    // 3. Verify business logic roles
+    // ===================== GET CUSTOMER =====================
+    const customer = await User.findById(customerId);
+    if (!customer) {
+      console.log("❌ Customer not found:", customerId);
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found",
+      });
+    }
+    console.log(
+      "✅ Customer found:",
+      customer._id,
+      customer.name?.full || customer.email,
+    );
+
+    // ===================== GET PROVIDER =====================
+    const provider = await User.findById(providerId);
+    if (!provider) {
+      console.log("❌ Provider not found:", providerId);
+      return res.status(404).json({
+        success: false,
+        message: "Provider not found",
+      });
+    }
+    console.log(
+      "✅ Provider found:",
+      provider._id,
+      provider.name?.full || provider.email,
+    );
+
+    // Check if user is a provider
     const isProvider =
       provider.type === "provider" || provider.roles?.includes("provider");
     if (!isProvider) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Selected user is not a service provider",
-        });
+      console.log("❌ User is not a provider:", provider.type, provider.roles);
+      return res.status(400).json({
+        success: false,
+        message: "The selected user is not a service provider",
+      });
     }
 
-    if (service.providerId?.toString() !== bookingData.providerId) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Service does not belong to this provider",
-        });
+    // ===================== GET SERVICE =====================
+    console.log("🔍 Looking for service with ID:", serviceId);
+    const service = await Service.findById(serviceId);
+    if (!service) {
+      console.log("❌ Service not found:", serviceId);
+      return res.status(404).json({
+        success: false,
+        message: "Service not found",
+      });
     }
+    console.log("✅ Service found:", service._id, service.name);
+    console.log("🔍 Service providerId:", service.providerId);
 
-    // 4. Fallback pricing engine
-    const finalPrice =
-      bookingData.servicePrice ?? service.basePrice ?? service.price ?? 0;
-    const finalDeposit = bookingData.depositAmount ?? 0;
-    const finalTotal = bookingData.totalAmount ?? finalPrice;
+    // Verify service belongs to the provider
+    if (service.providerId?.toString() !== providerId) {
+      console.log("❌ Service does not belong to provider");
+      console.log("   Service providerId:", service.providerId?.toString());
+      console.log("   Request providerId:", providerId);
+      return res.status(400).json({
+        success: false,
+        message: "Service does not belong to this provider",
+      });
+    }
+    console.log("✅ Service belongs to provider");
 
-    // 5. Structure data utilizing Mongoose schema validations
-    const booking = new Booking({
+    // ===================== CHECK CONFLICTS =====================
+    // const hasConflict = await Booking.checkConflicts(providerId, date, time);
+    // if (hasConflict) {
+    //   console.log("❌ Booking conflict found");
+    //   return res.status(409).json({
+    //     success: false,
+    //     message:
+    //       "The provider is already booked at this time. Please choose a different time.",
+    //   });
+    // }
+    console.log("✅ No booking conflicts");
+
+    // ===================== CALCULATE PRICES =====================
+    const finalPrice = servicePrice || service.basePrice || service.price || 0;
+    const finalDeposit = depositAmount || 0;
+    const finalTotal = totalAmount || finalPrice;
+
+    console.log("💰 Price calculation:", {
+      servicePrice,
+      serviceBasePrice: service.basePrice,
+      servicePrice: service.price,
+      finalPrice,
+      finalDeposit,
+      finalTotal,
+    });
+
+    // ===================== CREATE BOOKING =====================
+    const bookingData = {
       customerId,
       customerName:
-        bookingData.customerName ||
-        customer.name?.full ||
-        customer.email ||
-        "Customer",
-      customerEmail: customer.email,
-      customerPhone: customer.phone,
+        customerName || customer?.name?.full || customer?.email || "Customer",
+      customerEmail: customer?.email,
+      customerPhone: customer?.phone,
 
-      providerId: provider._id,
+      providerId,
       providerName:
-        bookingData.providerName ||
-        provider.name?.full ||
-        provider.name ||
-        "Provider",
+        providerName || provider?.name?.full || provider?.name || "Provider",
 
-      serviceId: service._id,
-      serviceName: bookingData.serviceName || service.name,
+      serviceId,
+      serviceName: serviceName || service?.name,
       servicePrice: finalPrice,
-      serviceDuration:
-        bookingData.serviceDuration || service.duration || "Variable",
-      serviceCategory: bookingData.serviceCategory || service.category,
-      serviceTypes: bookingData.serviceTypes || service.serviceTypes || [],
+      serviceDuration: serviceDuration || service?.duration || "Variable",
+      serviceCategory: serviceCategory || service?.category,
+      serviceTypes: serviceTypes || service?.serviceTypes || [],
 
-      bookingDate: new Date(bookingData.date),
-      bookingTime: bookingData.time,
+      bookingDate: new Date(date),
+      bookingTime: time,
 
       location: {
-        address: bookingData.address,
-        city: bookingData.city,
-        landmark: bookingData.landmark || "",
+        address,
+        city,
+        landmark: landmark || "",
       },
 
-      paymentMethod: bookingData.paymentMethod || "mobile-money",
+      paymentMethod: paymentMethod || "mobile-money",
       totalAmount: finalTotal,
       depositAmount: finalDeposit,
       remainingAmount: finalTotal - finalDeposit,
-      specialInstructions: bookingData.specialInstructions || "",
+
+      specialInstructions: specialInstructions || "",
+      status: "pending",
+      paymentStatus: "pending",
 
       metadata: {
         source: "web",
-        ipAddress: req.ip || req.headers["x-forwarded-for"] || "",
-        userAgent: req.headers["user-agent"] || "",
+        ipAddress: req.ip || req.connection?.remoteAddress,
+        userAgent: req.headers["user-agent"],
       },
-    });
+    };
 
-    // 6. Save and populate documents instantly without extra DB trips
+    console.log("📦 Final booking data:", JSON.stringify(bookingData, null, 2));
+
+    // Create booking
+    const booking = new Booking(bookingData);
     await booking.save();
+    console.log("✅ Booking saved with ID:", booking._id);
 
-    await booking.populate([
-      { path: "customerId", select: "name email avatar phone" },
-      { path: "providerId", select: "name email avatar provider_profile" },
-      { path: "serviceId", select: "name description serviceTypes category" },
-    ]);
+    // Populate references for response
+    const populatedBooking = await Booking.findById(booking._id)
+      .populate("customerId", "name email avatar phone")
+      .populate("providerId", "name email avatar provider_profile")
+      .populate("serviceId", "name description serviceTypes category");
+
+    console.log("✅ Booking populated and ready to return");
 
     return res.status(201).json({
       success: true,
+      data: populatedBooking,
       message: "Booking created successfully",
-      data: booking,
     });
   } catch (error) {
-    console.error("❌ Booking Error:", error);
+    console.error("❌ Error creating booking:", error);
+    console.error("❌ Error stack:", error.stack);
 
-    // Dynamic Safe Environment Check to eliminate ReferenceErrors
-    const isDev =
-      typeof process !== "undefined" && process.env?.NODE_ENV === "development";
-
+    // Handle specific Mongoose errors
     if (error.name === "ValidationError") {
+      const errors = Object.values(error.errors).map((err) => err.message);
       return res.status(400).json({
         success: false,
         message: "Validation error",
-        errors: Object.values(error.errors).map((err) => err.message),
+        errors: errors,
       });
     }
 
     if (error.name === "CastError") {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: `Invalid data format for ${error.path}`,
-        });
+      return res.status(400).json({
+        success: false,
+        message: `Invalid ${error.path}: ${error.value}`,
+      });
+    }
+
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "Duplicate booking found",
+        duplicate: error.keyPattern,
+      });
     }
 
     return res.status(500).json({
       success: false,
       message: "Failed to create booking",
       error: error.message,
-      stack: isDev ? error.stack : undefined,
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
   }
 };
-
-// ... rest of the controller functions remain the same

@@ -13,6 +13,7 @@ import {
   getMe,
   getMarketplaceProviders,
   getCurrentUser,
+  createCustomer,
 } from "../../controllers/authController.js";
 import { errorResponse } from "../../utils/apiResponse.js";
 import {
@@ -49,4 +50,6 @@ router.post("/provider-profile/draft", authMiddleware, saveProviderDraft);
 router.get("/get/all/providers", authMiddleware, getMarketplaceProviders);
 router.get("/auth/me", authMiddleware, getCurrentUser);
 router.post("/logout", authMiddleware, logoutUser);
+
+router.patch("/customer-onboarding", authMiddleware, createCustomer);
 export default router;

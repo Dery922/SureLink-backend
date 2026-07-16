@@ -671,7 +671,7 @@ export const updateProviderService = async (req, res) => {
 // Delete a single service
 export const deleteProviderService = async (req, res) => {
   try {
-    const { serviceId } = req.params;
+    const { id } = req.params; // Changed from serviceId to id to match route
     const userId = req.user?.id || req.user?._id;
 
     const user = await User.findById(userId);
@@ -692,7 +692,7 @@ export const deleteProviderService = async (req, res) => {
 
     // Find and delete the service
     const service = await Service.findOneAndDelete({
-      _id: serviceId,
+      _id: id, // Changed from serviceId to id
       providerId: userId,
     });
 
@@ -825,6 +825,127 @@ export const getServiceStats = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to fetch service statistics",
+      error: error.message,
+    });
+  }
+};
+
+export const deleteProviderGallery = async (req, res) => {
+  try {
+    console.log("🗑️ Delete request received:", {
+      params: req.params,
+      user: req.user?.id,
+      headers: req.headers,
+    });
+
+    const { imageId } = req.params;
+    const userId = req.user?.id || req.user?._id;
+
+    // Validate input
+    if (!imageId) {
+      console.log("❌ No imageId provided");
+      return res.status(400).json({
+        success: false,
+        message: "Image ID is required",
+      });
+    }
+
+    if (!userId) {
+      console.log("❌ No user ID found");
+      return res.status(401).json({
+        success: false,
+        message: "User not authenticated",
+      });
+    }
+
+    // Find the user
+    const user = await User.findById(userId);
+    if (!user) {
+      console.log("❌ User not found:", userId);
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Check if user is a provider
+    if (user.type !== "provider" && !user.roles?.includes("provider")) {
+      console.log("❌ User is not a provider:", userId);
+      return res.status(403).json({
+        success: false,
+        message: "Only providers can delete gallery images",
+      });
+    }
+
+    console.log(`🔍 Looking for image: ${imageId} for provider: ${userId}`);
+
+    // Find the gallery image - using providerId as per your model
+    const galleryImage = await Gallery.findOne({
+      _id: imageId,
+      providerId: userId,
+    });
+
+    if (!galleryImage) {
+      console.log("❌ Image not found:", imageId);
+      return res.status(404).json({
+        success: false,
+        message: "Image not found or you don't have permission to delete it",
+      });
+    }
+
+    console.log(`✅ Found image:`, {
+      id: galleryImage._id,
+      publicId: galleryImage.publicId,
+      providerId: galleryImage.providerId,
+    });
+
+    // Delete from Cloudinary using the publicId
+    let cloudinaryDeleted = false;
+    if (galleryImage.publicId) {
+      try {
+        console.log(`🗑️ Deleting from Cloudinary: ${galleryImage.publicId}`);
+
+        const result = await cloudinary.uploader.destroy(
+          galleryImage.publicId,
+          {
+            invalidate: true,
+          },
+        );
+
+        console.log(`📊 Cloudinary result:`, result);
+
+        if (result.result === "ok") {
+          cloudinaryDeleted = true;
+          console.log(`✅ Cloudinary deletion successful`);
+        } else {
+          console.warn(`⚠️ Cloudinary deletion result: ${result.result}`);
+        }
+      } catch (cloudinaryError) {
+        console.error("❌ Cloudinary error:", cloudinaryError);
+        // Continue with database deletion
+      }
+    }
+
+    // Delete from database
+    const deletedImage = await Gallery.findByIdAndDelete(imageId);
+
+    console.log(`✅ Database deletion successful`);
+
+    return res.status(200).json({
+      success: true,
+      message: "Image deleted successfully",
+      data: {
+        id: imageId,
+        publicId: galleryImage.publicId,
+        deletedFromCloudinary: cloudinaryDeleted,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error deleting gallery image:", error);
+    console.error("❌ Error stack:", error.stack);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete image",
       error: error.message,
     });
   }

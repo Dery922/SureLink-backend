@@ -294,367 +294,334 @@ bookingSchema.index({
 
 // ===================== VIRTUALS =====================
 
-// Check if booking can be cancelled
-bookingSchema.virtual("canCancel").get(function () {
-  const cancelableStatuses = ["pending", "confirmed"];
-  return cancelableStatuses.includes(this.status) && !this.isDeleted;
-});
+// // Check if booking can be cancelled
+// bookingSchema.virtual("canCancel").get(function () {
+//   const cancelableStatuses = ["pending", "confirmed"];
+//   return cancelableStatuses.includes(this.status) && !this.isDeleted;
+// });
 
-// Check if booking can be confirmed
-bookingSchema.virtual("canConfirm").get(function () {
-  return this.status === "pending" && !this.isDeleted;
-});
+// // Check if booking can be confirmed
+// bookingSchema.virtual("canConfirm").get(function () {
+//   return this.status === "pending" && !this.isDeleted;
+// });
 
-// Check if booking can be started
-bookingSchema.virtual("canStart").get(function () {
-  return this.status === "confirmed" && !this.isDeleted;
-});
+// // Check if booking can be started
+// bookingSchema.virtual("canStart").get(function () {
+//   return this.status === "confirmed" && !this.isDeleted;
+// });
 
-// Check if booking can be completed
-bookingSchema.virtual("canComplete").get(function () {
-  return ["confirmed", "in_progress"].includes(this.status) && !this.isDeleted;
-});
+// // Check if booking can be completed
+// bookingSchema.virtual("canComplete").get(function () {
+//   return ["confirmed", "in_progress"].includes(this.status) && !this.isDeleted;
+// });
 
-// Check if booking can be rated
-bookingSchema.virtual("canRate").get(function () {
-  return this.status === "completed" && !this.rating?.score && !this.isDeleted;
-});
+// // Check if booking can be rated
+// bookingSchema.virtual("canRate").get(function () {
+//   return this.status === "completed" && !this.rating?.score && !this.isDeleted;
+// });
 
-// Get booking status display
-bookingSchema.virtual("statusDisplay").get(function () {
-  const statusMap = {
-    pending: "Pending",
-    confirmed: "Confirmed",
-    in_progress: "In Progress",
-    completed: "Completed",
-    cancelled: "Cancelled",
-    no_show: "No Show",
-    rescheduled: "Rescheduled",
-  };
-  return statusMap[this.status] || this.status;
-});
+// // Get booking status display
+// bookingSchema.virtual("statusDisplay").get(function () {
+//   const statusMap = {
+//     pending: "Pending",
+//     confirmed: "Confirmed",
+//     in_progress: "In Progress",
+//     completed: "Completed",
+//     cancelled: "Cancelled",
+//     no_show: "No Show",
+//     rescheduled: "Rescheduled",
+//   };
+//   return statusMap[this.status] || this.status;
+// });
 
-// Get payment status display
-bookingSchema.virtual("paymentStatusDisplay").get(function () {
-  const statusMap = {
-    pending: "Pending",
-    paid: "Paid",
-    failed: "Failed",
-    refunded: "Refunded",
-    partially_paid: "Partially Paid",
-  };
-  return statusMap[this.paymentStatus] || this.paymentStatus;
-});
+// // Get payment status display
+// bookingSchema.virtual("paymentStatusDisplay").get(function () {
+//   const statusMap = {
+//     pending: "Pending",
+//     paid: "Paid",
+//     failed: "Failed",
+//     refunded: "Refunded",
+//     partially_paid: "Partially Paid",
+//   };
+//   return statusMap[this.paymentStatus] || this.paymentStatus;
+// });
 
-// Calculate total with deposit
-bookingSchema.virtual("totalWithDeposit").get(function () {
-  return this.totalAmount + (this.depositAmount || 0);
-});
+// // Calculate total with deposit
+// bookingSchema.virtual("totalWithDeposit").get(function () {
+//   return this.totalAmount + (this.depositAmount || 0);
+// });
 
-// Check if booking is overdue (for pending payments)
-bookingSchema.virtual("isOverdue").get(function () {
-  if (this.paymentStatus !== "pending") return false;
-  const threeDaysAgo = new Date();
-  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-  return this.createdAt < threeDaysAgo;
-});
+// // Check if booking is overdue (for pending payments)
+// bookingSchema.virtual("isOverdue").get(function () {
+//   if (this.paymentStatus !== "pending") return false;
+//   const threeDaysAgo = new Date();
+//   threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+//   return this.createdAt < threeDaysAgo;
+// });
 
-// ===================== INSTANCE METHODS =====================
+// // ===================== INSTANCE METHODS =====================
 
-// Cancel booking
-bookingSchema.methods.cancel = function (reason = "") {
-  if (!this.canCancel) {
-    throw new Error("This booking cannot be cancelled");
-  }
-  this.status = "cancelled";
-  this.cancelledAt = new Date();
-  this.cancelledReason = reason;
-  return this.save();
-};
+// // Cancel booking
+// bookingSchema.methods.cancel = function (reason = "") {
+//   if (!this.canCancel) {
+//     throw new Error("This booking cannot be cancelled");
+//   }
+//   this.status = "cancelled";
+//   this.cancelledAt = new Date();
+//   this.cancelledReason = reason;
+//   return this.save();
+// };
 
-// Confirm booking
-bookingSchema.methods.confirm = function () {
-  if (!this.canConfirm) {
-    throw new Error("Only pending bookings can be confirmed");
-  }
-  this.status = "confirmed";
-  this.confirmedAt = new Date();
-  return this.save();
-};
+// // Confirm booking
+// bookingSchema.methods.confirm = function () {
+//   if (!this.canConfirm) {
+//     throw new Error("Only pending bookings can be confirmed");
+//   }
+//   this.status = "confirmed";
+//   this.confirmedAt = new Date();
+//   return this.save();
+// };
 
-// Start booking (in-progress)
-bookingSchema.methods.start = function () {
-  if (!this.canStart) {
-    throw new Error("Only confirmed bookings can be started");
-  }
-  this.status = "in_progress";
-  this.startedAt = new Date();
-  return this.save();
-};
+// // Start booking (in-progress)
+// bookingSchema.methods.start = function () {
+//   if (!this.canStart) {
+//     throw new Error("Only confirmed bookings can be started");
+//   }
+//   this.status = "in_progress";
+//   this.startedAt = new Date();
+//   return this.save();
+// };
 
-// Complete booking
-bookingSchema.methods.complete = function () {
-  if (!this.canComplete) {
-    throw new Error("Only confirmed or in-progress bookings can be completed");
-  }
-  this.status = "completed";
-  this.completedAt = new Date();
-  return this.save();
-};
+// // Complete booking
+// bookingSchema.methods.complete = function () {
+//   if (!this.canComplete) {
+//     throw new Error("Only confirmed or in-progress bookings can be completed");
+//   }
+//   this.status = "completed";
+//   this.completedAt = new Date();
+//   return this.save();
+// };
 
-// Mark as no-show
-bookingSchema.methods.markAsNoShow = function () {
-  if (this.status !== "confirmed" && this.status !== "pending") {
-    throw new Error(
-      "Only pending or confirmed bookings can be marked as no-show",
-    );
-  }
-  this.status = "no_show";
-  this.completedAt = new Date();
-  this.notes = this.notes
-    ? `${this.notes}\nCustomer did not show up.`
-    : "Customer did not show up.";
-  return this.save();
-};
+// // Mark as no-show
+// bookingSchema.methods.markAsNoShow = function () {
+//   if (this.status !== "confirmed" && this.status !== "pending") {
+//     throw new Error(
+//       "Only pending or confirmed bookings can be marked as no-show",
+//     );
+//   }
+//   this.status = "no_show";
+//   this.completedAt = new Date();
+//   this.notes = this.notes
+//     ? `${this.notes}\nCustomer did not show up.`
+//     : "Customer did not show up.";
+//   return this.save();
+// };
 
-// Reschedule booking
-bookingSchema.methods.reschedule = function (newDate, newTime, reason = "") {
-  if (
-    this.status === "completed" ||
-    this.status === "cancelled" ||
-    this.status === "no_show"
-  ) {
-    throw new Error(
-      "Completed, cancelled, or no-show bookings cannot be rescheduled",
-    );
-  }
+// // Reschedule booking
+// bookingSchema.methods.reschedule = function (newDate, newTime, reason = "") {
+//   if (
+//     this.status === "completed" ||
+//     this.status === "cancelled" ||
+//     this.status === "no_show"
+//   ) {
+//     throw new Error(
+//       "Completed, cancelled, or no-show bookings cannot be rescheduled",
+//     );
+//   }
 
-  this.previousBookingDate = this.bookingDate;
-  this.bookingDate = newDate;
-  this.bookingTime = newTime;
-  this.status = "rescheduled";
-  this.rescheduledAt = new Date();
-  this.rescheduledReason = reason;
-  return this.save();
-};
+//   this.previousBookingDate = this.bookingDate;
+//   this.bookingDate = newDate;
+//   this.bookingTime = newTime;
+//   this.status = "rescheduled";
+//   this.rescheduledAt = new Date();
+//   this.rescheduledReason = reason;
+//   return this.save();
+// };
 
-// Add rating
-bookingSchema.methods.addRating = function (score, comment = "") {
-  if (!this.canRate) {
-    throw new Error("This booking cannot be rated");
-  }
-  this.rating = {
-    score: score,
-    comment: comment,
-    ratedAt: new Date(),
-  };
-  return this.save();
-};
+// // Add rating
+// bookingSchema.methods.addRating = function (score, comment = "") {
+//   if (!this.canRate) {
+//     throw new Error("This booking cannot be rated");
+//   }
+//   this.rating = {
+//     score: score,
+//     comment: comment,
+//     ratedAt: new Date(),
+//   };
+//   return this.save();
+// };
 
-// Mark payment as paid
-bookingSchema.methods.markAsPaid = function (reference = "") {
-  this.paymentStatus = "paid";
-  this.paymentReference = reference;
-  this.paymentDetails.set("paidAt", new Date());
-  this.remainingAmount = 0;
-  return this.save();
-};
+// // Mark payment as paid
+// bookingSchema.methods.markAsPaid = function (reference = "") {
+//   this.paymentStatus = "paid";
+//   this.paymentReference = reference;
+//   this.paymentDetails.set("paidAt", new Date());
+//   this.remainingAmount = 0;
+//   return this.save();
+// };
 
-// Mark payment as failed
-bookingSchema.methods.markPaymentFailed = function (reason = "") {
-  this.paymentStatus = "failed";
-  this.paymentDetails.set("failedReason", reason);
-  this.paymentDetails.set("failedAt", new Date());
-  return this.save();
-};
+// // Mark payment as failed
+// bookingSchema.methods.markPaymentFailed = function (reason = "") {
+//   this.paymentStatus = "failed";
+//   this.paymentDetails.set("failedReason", reason);
+//   this.paymentDetails.set("failedAt", new Date());
+//   return this.save();
+// };
 
-// Process refund
-bookingSchema.methods.processRefund = function (reason = "") {
-  if (this.paymentStatus !== "paid") {
-    throw new Error("Only paid bookings can be refunded");
-  }
-  this.paymentStatus = "refunded";
-  this.paymentDetails.set("refundReason", reason);
-  this.paymentDetails.set("refundedAt", new Date());
-  return this.save();
-};
+// // Process refund
+// bookingSchema.methods.processRefund = function (reason = "") {
+//   if (this.paymentStatus !== "paid") {
+//     throw new Error("Only paid bookings can be refunded");
+//   }
+//   this.paymentStatus = "refunded";
+//   this.paymentDetails.set("refundReason", reason);
+//   this.paymentDetails.set("refundedAt", new Date());
+//   return this.save();
+// };
 
-// Soft delete
-bookingSchema.methods.softDelete = function (reason = "") {
-  this.isDeleted = true;
-  this.deletedAt = new Date();
-  this.deletedReason = reason;
-  return this.save();
-};
+// // Soft delete
+// bookingSchema.methods.softDelete = function (reason = "") {
+//   this.isDeleted = true;
+//   this.deletedAt = new Date();
+//   this.deletedReason = reason;
+//   return this.save();
+// };
 
-// ===================== STATIC METHODS =====================
+// // ===================== STATIC METHODS =====================
 
-// Get booking statistics
-bookingSchema.statics.getStats = async function (
-  providerId,
-  startDate,
-  endDate,
-) {
-  const match = {};
-  if (providerId) {
-    match.providerId = mongoose.Types.ObjectId(providerId);
-  }
-  if (startDate || endDate) {
-    match.createdAt = {};
-    if (startDate) match.createdAt.$gte = new Date(startDate);
-    if (endDate) match.createdAt.$lte = new Date(endDate);
-  }
+// // Get booking statistics
+// bookingSchema.statics.getStats = async function (
+//   providerId,
+//   startDate,
+//   endDate,
+// ) {
+//   const match = {};
+//   if (providerId) {
+//     match.providerId = mongoose.Types.ObjectId(providerId);
+//   }
+//   if (startDate || endDate) {
+//     match.createdAt = {};
+//     if (startDate) match.createdAt.$gte = new Date(startDate);
+//     if (endDate) match.createdAt.$lte = new Date(endDate);
+//   }
 
-  const stats = await this.aggregate([
-    { $match: { ...match, isDeleted: false } },
-    {
-      $group: {
-        _id: "$status",
-        count: { $sum: 1 },
-        totalAmount: { $sum: "$totalAmount" },
-        averageAmount: { $avg: "$totalAmount" },
-      },
-    },
-  ]);
+//   const stats = await this.aggregate([
+//     { $match: { ...match, isDeleted: false } },
+//     {
+//       $group: {
+//         _id: "$status",
+//         count: { $sum: 1 },
+//         totalAmount: { $sum: "$totalAmount" },
+//         averageAmount: { $avg: "$totalAmount" },
+//       },
+//     },
+//   ]);
 
-  const total = await this.countDocuments({ ...match, isDeleted: false });
+//   const total = await this.countDocuments({ ...match, isDeleted: false });
 
-  return {
-    total,
-    byStatus: stats,
-  };
-};
+//   return {
+//     total,
+//     byStatus: stats,
+//   };
+// };
 
-// Get monthly bookings for provider
-bookingSchema.statics.getMonthlyStats = async function (
-  providerId,
-  months = 6,
-) {
-  const match = { isDeleted: false };
-  if (providerId) {
-    match.providerId = mongoose.Types.ObjectId(providerId);
-  }
+// // Get monthly bookings for provider
+// bookingSchema.statics.getMonthlyStats = async function (
+//   providerId,
+//   months = 6,
+// ) {
+//   const match = { isDeleted: false };
+//   if (providerId) {
+//     match.providerId = mongoose.Types.ObjectId(providerId);
+//   }
 
-  const startDate = new Date();
-  startDate.setMonth(startDate.getMonth() - months);
+//   const startDate = new Date();
+//   startDate.setMonth(startDate.getMonth() - months);
 
-  match.createdAt = { $gte: startDate };
+//   match.createdAt = { $gte: startDate };
 
-  const stats = await this.aggregate([
-    { $match: match },
-    {
-      $group: {
-        _id: {
-          year: { $year: "$createdAt" },
-          month: { $month: "$createdAt" },
-        },
-        count: { $sum: 1 },
-        totalAmount: { $sum: "$totalAmount" },
-      },
-    },
-    { $sort: { "_id.year": -1, "_id.month": -1 } },
-    { $limit: months },
-  ]);
+//   const stats = await this.aggregate([
+//     { $match: match },
+//     {
+//       $group: {
+//         _id: {
+//           year: { $year: "$createdAt" },
+//           month: { $month: "$createdAt" },
+//         },
+//         count: { $sum: 1 },
+//         totalAmount: { $sum: "$totalAmount" },
+//       },
+//     },
+//     { $sort: { "_id.year": -1, "_id.month": -1 } },
+//     { $limit: months },
+//   ]);
 
-  return stats;
-};
+//   return stats;
+// };
 
-// Get upcoming bookings for provider
-bookingSchema.statics.getUpcoming = async function (providerId, limit = 10) {
-  const match = {
-    providerId: mongoose.Types.ObjectId(providerId),
-    status: { $in: ["pending", "confirmed"] },
-    bookingDate: { $gte: new Date() },
-    isDeleted: false,
-  };
+// // Get upcoming bookings for provider
+// bookingSchema.statics.getUpcoming = async function (providerId, limit = 10) {
+//   const match = {
+//     providerId: mongoose.Types.ObjectId(providerId),
+//     status: { $in: ["pending", "confirmed"] },
+//     bookingDate: { $gte: new Date() },
+//     isDeleted: false,
+//   };
 
-  const bookings = await this.find(match)
-    .sort({ bookingDate: 1, bookingTime: 1 })
-    .limit(limit)
-    .populate("customerId", "name email avatar")
-    .populate("serviceId", "name description");
+//   const bookings = await this.find(match)
+//     .sort({ bookingDate: 1, bookingTime: 1 })
+//     .limit(limit)
+//     .populate("customerId", "name email avatar")
+//     .populate("serviceId", "name description");
 
-  return bookings;
-};
+//   return bookings;
+// };
 
-// Check for conflicting bookings
-// backend/models/Booking.js
-
+// // Check for conflicting bookings
 // bookingSchema.statics.checkConflicts = async function (
 //   providerId,
 //   date,
 //   time,
 //   excludeBookingId = null,
 // ) {
-//   try {
-//     // Validate inputs first
-//     if (!providerId || !date || !time) {
-//       console.error("❌ checkConflicts: Missing required parameters", {
-//         providerId,
-//         date,
-//         time,
-//       });
-//       return false; // Return false for missing params (no conflict)
-//     }
+//   const query = {
+//     providerId: new mongoose.Types.ObjectId(providerId),
+//     bookingDate: new Date(date),
+//     bookingTime: time,
+//     status: { $in: ["pending", "confirmed"] },
+//     isDeleted: false,
+//   };
 
-//     // Convert to ObjectId safely
-//     let providerObjectId;
-//     try {
-//       providerObjectId = new mongoose.Types.ObjectId(providerId);
-//     } catch (err) {
-//       console.error("❌ checkConflicts: Invalid providerId", providerId);
-//       return false;
-//     }
-
-//     const query = {
-//       providerId: providerObjectId,
-//       bookingDate: new Date(date),
-//       bookingTime: time,
-//       status: { $in: ["pending", "confirmed"] },
-//       isDeleted: false,
+//   if (excludeBookingId) {
+//     query._id = {
+//       $ne: new mongoose.Types.ObjectId(excludeBookingId),
 //     };
-
-//     if (excludeBookingId) {
-//       try {
-//         query._id = { $ne: new mongoose.Types.ObjectId(excludeBookingId) };
-//       } catch (err) {
-//         console.error(
-//           "❌ checkConflicts: Invalid excludeBookingId",
-//           excludeBookingId,
-//         );
-//         // Continue without exclusion
-//       }
-//     }
-
-//     const conflicting = await this.findOne(query);
-//     return !!conflicting;
-//   } catch (error) {
-//     console.error("❌ Error checking conflicts:", error);
-//     // ⚠️ For safety, return true to prevent double booking when there's an error
-//     return true; // Changed from false to true - better to prevent booking than allow double booking
 //   }
+
+//   const conflicting = await this.findOne(query);
+//   return !!conflicting;
 // };
-// ===================== MIDDLEWARE =====================
+// // ===================== MIDDLEWARE =====================
 
-// Pre-save middleware
-bookingSchema.pre("save", function (next) {
-  // Calculate remaining amount if deposit is set
-  if (this.depositAmount > 0) {
-    this.remainingAmount = this.totalAmount - this.depositAmount;
-  }
+// // Pre-save middleware
+// bookingSchema.pre("save", function (next) {
+//   // Calculate remaining amount if deposit is set
+//   if (this.depositAmount > 0) {
+//     this.remainingAmount = this.totalAmount - this.depositAmount;
+//   }
 
-  // Ensure booking date is a Date object
-  if (this.bookingDate && typeof this.bookingDate === "string") {
-    this.bookingDate = new Date(this.bookingDate);
-  }
-});
+//   // Ensure booking date is a Date object
+//   if (this.bookingDate && typeof this.bookingDate === "string") {
+//     this.bookingDate = new Date(this.bookingDate);
+//   }
+// });
 
-// Pre-find middleware to exclude soft-deleted by default
-bookingSchema.pre(/^find/, function (next) {
-  // Only apply if not explicitly including deleted
-  if (this._conditions && this._conditions.includeDeleted !== true) {
-    this._conditions.isDeleted = { $ne: true };
-  }
-});
+// // Pre-find middleware to exclude soft-deleted by default
+// bookingSchema.pre(/^find/, function (next) {
+//   // Only apply if not explicitly including deleted
+//   if (this._conditions && this._conditions.includeDeleted !== true) {
+//     this._conditions.isDeleted = { $ne: true };
+//   }
+// });
 
 export default mongoose.model("Booking", bookingSchema);

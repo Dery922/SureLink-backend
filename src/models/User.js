@@ -111,6 +111,12 @@ const userSchema = new Schema(
 
     // ---------- Provider ----------
     provider_profile: {
+      // 🎯 CRITICAL: Add a specific verification status for the provider side only!
+      verification_status: {
+        type: String,
+        enum: ["not_started", "pending", "approved", "rejected"],
+        default: "not_started",
+      },
       category: String,
       secondaryCategories: [String], // ✨ Added to catch extra service capabilities
       service_area: String, // ✨ Added to store location strings like "East Legon"
@@ -156,7 +162,8 @@ const userSchema = new Schema(
     status: {
       type: String,
       enum: ["active", "suspended", "banned", "verification_pending"],
-      default: "verification_pending",
+      default: "active", // New accounts are active customers instantly.
+      // Use provider_profile.verification_status for the provider review state!
     },
 
     // ---------- Security ----------

@@ -9,6 +9,7 @@ import MongoStore from "connect-mongo";
 import authRoutes from "./src/modules/auth/auth.routes.js";
 import mainRoutes from "./src/modules/main/main.routes.js";
 import bookingRoutes from "./src/modules/bookingRoutes.js";
+import paystackRoutes from "./src/modules/paystackRoutes.js";
 // Security
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -89,6 +90,7 @@ app.use("/api/", limiter);
 app.use("/api/auth", authRoutes);
 app.use("/api", mainRoutes);
 app.use("/api", bookingRoutes);
+app.use("/api", paystackRoutes);
 
 // Root Endpoint / Health Check
 app.get("/", (req, res) => {

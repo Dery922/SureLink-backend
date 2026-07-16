@@ -10,6 +10,8 @@ import {
   uploadGalleryImages,
   getGalleryByUserId,
   getProviderById,
+  deleteProviderService,
+  deleteProviderGallery,
 } from "../../controllers/mainController.js";
 
 const router = Router();
@@ -30,5 +32,11 @@ router.post(
 );
 
 router.get("/gallery/user/:userId", authMiddleware, getGalleryByUserId);
+router.delete("/provider/services/:id", authMiddleware, deleteProviderService);
+router.delete(
+  "/provider/gallery/:imageId",
+  authMiddleware,
+  deleteProviderGallery,
+);
 
 export default router;

@@ -13,7 +13,6 @@ import { issueOtp, verifyOtp } from "../services/otpService.js";
 import jwt from "jsonwebtoken";
 import cloudinary from "../config/cloudinary.js";
 import Service from "../models/Service.js";
-import mongoose from "mongoose";
 
 import locationService from "../services/locationService.js";
 import profileOptimizationService from "../services/profileOptimizationService.js";
@@ -1065,109 +1064,157 @@ export const formatUserPayload = (user) => {
 
 export const createCustomer = async (req, res) => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized access. No session identity found.",
-      });
-    }
-
     const customerData = req.body;
 
-    // 🎯 2. FIX: Convert string ID explicitly to ObjectId to prevent self-conflict checks
-    const currentObjectUserId = new mongoose.Types.ObjectId(userId);
-
-    // Defensive check for uniqueness if they changed their phone number
-    if (customerData.phone) {
-      const existingPhoneOwner = await User.findOne({
-        phone: customerData.phone,
-        _id: { $ne: currentObjectUserId }, // 🎯 Excludes the user across matching types
-      });
-
-      if (existingPhoneOwner) {
-        return res.status(409).json({
-          success: false,
-          message:
-            "This phone number is already registered to another account.",
-          field: "phone",
-        });
-      }
-    }
-
-    // Construct update document layout aligned perfectly with User model
-    const updates = {
-      $set: {
-        // Identity Upgrades
-        phone: customerData.phone,
-        "name.first": customerData.name?.first,
-        "name.last": customerData.name?.last,
-        "name.full":
-          `${customerData.name?.first || ""} ${customerData.name?.last || ""}`.trim(),
-        "name.display": customerData.name?.first,
-
-        // Avatar updates
-        ...(customerData.avatar?.url && {
-          avatar: {
-            url: customerData.avatar.url,
-            thumb: customerData.avatar.url,
-            updated_at: new Date(),
-          },
-        }),
-
-        // Roles & Type Affirmation
-        type: "customer",
-        roles: ["user", "customer"],
-
-        // Onboarding Progression State Complete
-        "onboarding.completed": true,
-        "onboarding.terms_accepted": true,
-        "onboarding.terms_accepted_at": new Date(),
-        "onboarding.current_step": "completed",
-        current_step: "completed",
-
-        // Model Compliant Structural Location Processing
-        "location.home_address.street":
-          customerData.location?.home_address?.street || "",
-        "location.home_address.area":
-          customerData.location?.home_address?.area || "",
-        "location.home_address.gps_code":
-          customerData.location?.home_address?.gps_code || "",
-
-        // Account Activation
-        status: "active",
-        "audit.updated_at": new Date(),
-      },
-    };
-
-    // Update the user account in the database using the string userId
-    const updatedUser = await User.findByIdAndUpdate(userId, updates, {
-      new: true,
-      runValidators: true,
-    }).select("-security -driver_profile -provider_profile -business_profile");
-
-    if (!updatedUser) {
-      return res.status(404).json({
-        success: false,
-        message: "User profile was not found.",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Account onboarded successfully! Welcome to SureLink 🎉",
-      user: updatedUser,
+    // 1. Check if user already exists
+    const existingUser = await User.findOne({
+      $or: [
+        { email: customerData.email?.toLowerCase() },
+        { phone: customerData.phone },
+      ],
     });
-  } catch (error) {
-    if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern);
+
+    if (existingUser) {
+      const field =
+        existingUser.email === customerData.email?.toLowerCase()
+          ? "email"
+          : "phone";
       return res.status(409).json({
         success: false,
-        message: `This ${field} already belongs to an active account.`,
+        message: `This ${field} is already registered. Please login instead.`,
         field,
       });
     }
 
+    // 2. Prepare user data matching the User model
+    const userData = {
+      // Identity
+      phone: customerData.phone,
+
+      name: {
+        full: `${customerData.name.first} ${customerData.name.last}`,
+        display: `${customerData.name.first} ${customerData.name.last}`,
+        first: customerData.name.first,
+        last: customerData.name.last,
+      },
+
+      // Avatar
+      avatar: customerData.avatar?.url
+        ? {
+            url: customerData.avatar.url,
+            thumb: customerData.avatar.url,
+            updated_at: new Date(),
+          }
+        : undefined,
+
+      // Role
+      type: "customer",
+      roles: ["user", "customer"],
+
+      // Onboarding
+      onboarding: {
+        completed: true,
+        terms_accepted: true,
+        terms_accepted_at: new Date(),
+        current_step: "completed",
+      },
+      current_step: "completed",
+
+      // Location
+      location: {
+        home_address: {
+          street: customerData.location?.home_address?.street || "",
+          area:
+            customerData.location?.home_address?.area ||
+            customerData.location?.home_address?.city ||
+            "",
+          city: customerData.location?.home_address?.city,
+          region: customerData.location?.home_address?.region,
+          gps_code: customerData.location?.home_address?.gps_code || "",
+        },
+      },
+
+      // Status
+      status: "active",
+
+      // Verification (initially unverified)
+      verification: {
+        phone: {
+          verified: false,
+          verified_at: null,
+        },
+        email: {
+          verified: false,
+          verified_at: null,
+        },
+      },
+
+      // Preferences
+      preferences: {
+        language: customerData.preferences?.language || "en",
+        notifications: {
+          sms: customerData.preferences?.notifications?.sms !== false,
+          push: customerData.preferences?.notifications?.push !== false,
+        },
+      },
+
+      // Trust (starting with default values)
+      trust: {
+        score: 5,
+        average_rating: 0,
+        total_ratings: 0,
+      },
+
+      // Audit
+      audit: {
+        created_at: new Date(),
+        updated_at: new Date(),
+        last_login_at: null,
+      },
+
+      // Security
+      security: {
+        failed_login_attempts: 0,
+        mfa_enabled: false,
+      },
+    };
+
+    // 3. Create user in database
+    const user = new User(userData);
+    await user.save();
+
+    // 4. Generate JWT token (if you have this function)
+    // const token = generateToken({ id: user._id, email: user.email, type: user.type });
+
+    // 5. Return response
+    return res.status(201).json({
+      success: true,
+      message: "Account created successfully! Welcome to SureLink 🎉",
+      // token, // Uncomment if you have token generation
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        type: user.type,
+        avatar: user.avatar,
+        location: user.location,
+        onboarding: user.onboarding,
+        status: user.status,
+      },
+    });
+  } catch (error) {
+    // Handle duplicate key error
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      return res.status(409).json({
+        success: false,
+        message: `A user with this ${field} already exists.`,
+        field,
+      });
+    }
+
+    // Handle validation error
     if (error.name === "ValidationError") {
       const errors = {};
       for (const field in error.errors) {
@@ -1175,15 +1222,15 @@ export const createCustomer = async (req, res) => {
       }
       return res.status(400).json({
         success: false,
-        message: "Onboarding form verification failed.",
+        message: "Validation failed",
         errors,
       });
     }
 
-    console.error("Customer onboarding transaction critical failure:", error);
+    console.error("Customer onboarding error:", error);
     return res.status(500).json({
       success: false,
-      message: "Server encountered an error saving onboarding profile data.",
+      message: "An unexpected error occurred. Please try again later.",
     });
   }
 };
