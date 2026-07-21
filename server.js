@@ -17,6 +17,7 @@ import providerApplicationRoutes from "./src/services/providerApplication.routes
 import bookingRoutes from "./src/services/booking.routes.js";
 import mainRoutes from "./src/services/main.routes.js";
 import paystackRoutes from "./src/services/paystack.routes.js";
+import { registerContainerMiddleware } from "./src/containers/rbac.container.js";
 import { initializeAuthEventHandlers } from "./src/services/authEvents.js";
 
 // Admin module
@@ -131,6 +132,11 @@ async function bootstrap() {
       name: "surelink.sid",
     }),
   );
+
+  // RBAC: attach a per-request container exposing rbacService/roleRepository so
+  // requireRole/requirePermission middleware (src/middleware/rbac.middleware.js)
+  // can resolve them via req.container.resolve(...).
+  app.use(registerContainerMiddleware());
 
   // ================== ROUTES ==================
   app.use("/api/auth", authRoutes);
