@@ -1,18 +1,19 @@
+// src/utils/errors.js
+
 /**
- * Application error type used for consistent API responses.
- *
- * The global error handler reads:
- * - `status` / `statusCode` for HTTP status
- * - `code` for a stable, machine-readable error identifier
- * - `details` for optional context safe to return to clients
+ * Custom Operational Error Class for SureLink Application Stack
+ * Used to throw handled exceptions across controllers, services, and repositories.
  */
 export class AppError extends Error {
-  constructor(message, statusCode = 500, code = "INTERNAL_ERROR", details = null) {
+  constructor(message, status = 500, code = "INTERNAL_ERROR", details = null) {
     super(message);
-    this.name = "AppError";
-    this.status = statusCode;
-    this.statusCode = statusCode;
-    this.code = code;
-    this.details = details;
+
+    this.status = status; // HTTP Status Code (e.g., 400, 404, 429)
+    this.code = code; // Business Logic String Code (e.g., 'AUTH_INVALID_PHONE')
+    this.details = details; // Optional array or object with extra validation details
+    this.isOperational = true; // Marks it as a handled operational error
+
+    // Captures clean v8 execution stack frames for debugging, avoiding this constructor layer
+    Error.captureStackTrace(this, this.constructor);
   }
 }

@@ -4,74 +4,57 @@ import { AppError } from "../utils/errors.js";
 /**
  * UserFactory - Handles creation of user-related objects
  */
+
 export class UserFactory {
   /**
-   * Create a new user object for database insertion
+   * Generates a bare-minimum footprint payload for new OTP registrations.
+   * Allows fields like name and phone/email to remain unpopulated until onboarding.
    */
-  static createUserPayload({
-    phone,
-    email,
-    type,
-    fullName,
-  }) {
-    if (!phone || !fullName || !type) {
-      throw new AppError("Phone, fullName, and type are required", 400, "VALIDATION_ERROR");
+  static createUserPayload({ phone, email, type = "customer" }) {
+    if (!phone && !email) {
+      throw new AppError(
+        "An email or phone number is required to register.",
+        400,
+        "VALIDATION_ERROR",
+      );
     }
 
+    // Build the payload mapping structure to strictly match your User.js schema layout
     return {
-      phone,
-      email: email || undefined,
-      type,
+      phone: phone || undefined, // undefined strips empty fields to avoid unique null conflicts in Mongo
+      email: email ? email.trim().toLowerCase() : undefined,
+      type: type || "customer",
       roles: ["user"],
-      status: "verification_pending",
-      name: this.createNameObject(fullName),
+      status: "verification_pending", // Held in pending status until profile setup forms are complete
       verification: {
-        phone: { verified: true, verified_at: new Date() },
-        email: { verified: false },
+        phone: { verified: !!phone, verified_at: phone ? new Date() : null },
+        email: { verified: !!email, verified_at: email ? new Date() : null },
+      },
+      audit: {
+        created_at: new Date(),
+        updated_at: new Date(),
       },
     };
   }
 
   /**
-   * Create a name object from full name string
+   * Sanitizes a raw database document down to safe public parameters for the client.
    */
-  static createNameObject(fullName) {
-    const clean = String(fullName || "").trim().replace(/\s+/g, " ");
-    if (!clean) {
-      return { full: "", first: "", last: "", display: "" };
-    }
-
-    const [first = "", ...rest] = clean.split(" ");
-    const last = rest.join(" ");
-    return { full: clean, first, last, display: first || clean };
-  }
-
-  /**
-   * Create a public user response object
-   */
-  static createPublicUser(user) {
-    if (!user || !user._id) {
-      throw new AppError("Invalid user object", 500, "USER_FACTORY_ERROR");
-    }
+  static createPublicUser(userDoc) {
+    if (!userDoc) return null;
 
     return {
-      id: user._id,
-      phone: user.phone,
-      email: user.email || null,
-      type: user.type,
-      status: user.status,
-      name: user.name,
-    };
-  }
-
-  /**
-   * Create audit trail for user
-   */
-  static createAuditEntry(action, metadata = {}) {
-    return {
-      action,
-      timestamp: new Date(),
-      ...metadata,
+      id: userDoc._id.toString() || userDoc.id,
+      phone: userDoc.phone || null,
+      email: userDoc.email || null,
+      name: userDoc.name || { full: "", display: "", first: "", last: "" },
+      type: userDoc.type,
+      status: userDoc.status,
+      roles: userDoc.type,
+      onboarding: userDoc.onboarding || {
+        completed: false,
+        current_step: "role_selection",
+      },
     };
   }
 }

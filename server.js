@@ -1,6 +1,7 @@
+import dotenv from "dotenv";
+dotenv.config();
 import express from "express";
 import mongoose from "mongoose";
-import dotenv from "dotenv";
 import http from "http";
 import cors from "cors";
 import session from "express-session";
@@ -14,7 +15,10 @@ import { errorResponse } from "./src/utils/apiResponse.js";
 // Routes
 import authRoutes from "./src/modules/auth/auth.routes.js";
 import userRoutes from "./src/modules/users/user.routes.js";
-import { initializeAuthEventHandlers } from "./src/services/authEvents.js";
+import mainRoutes from "./src/modules/main/main.routes.js";
+import bookingRoutes from "./src/modules/bookingRoutes.js";
+import paystackRoutes from "./src/modules/paystackRoutes.js";
+
 import { connectRedis, getRedisClient } from "./src/utils/redisClient.js";
 
 // Socket (for future use)
@@ -25,15 +29,11 @@ import { Server } from "socket.io";
  *
  * High-level boot order:
  * - Load env
- * - Initialize in-process event handlers
  * - Configure Express (security, CORS, rate limit)
- * - Connect Redis and wire session middleware
+ * - Connect Redis and wire session middleware (admin OTP/session state)
  * - Register routes and global error handler
  * - Connect MongoDB and start HTTP server
  */
-dotenv.config();
-initializeAuthEventHandlers();
-
 const app = express();
 const server = http.createServer(app);
 const redisClient = getRedisClient();
@@ -48,17 +48,25 @@ const io = new Server(server, {
 // Make Socket.IO available to route handlers/controllers if needed.
 app.set("io", io);
 
-// ================== MIDDLEWARE ==================
-app.use(express.json({ limit: "10kb" }));
-app.use(express.urlencoded({ extended: true }));
+// ================== GLOBAL MIDDLEWARES ==================
+app.set("trust proxy", false);
+// Set to 10mb globally so base64 pictures don't throw 413 errors.
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
-// CORS
+// Debug Network Logger
+app.use((req, res, next) => {
+  console.log("🔥 HIT:", req.method, req.url);
+  next();
+});
+
+// Single CORS configuration allowing cookies/sessions
 app.use(
   cors({
     origin: process.env.FRONTEND_URL || "http://localhost:3000",
-    credentials: true, // Required for session cookies
+    credentials: true,
     optionsSuccessStatus: 200,
-  })
+  }),
 );
 
 // Security headers
@@ -79,7 +87,7 @@ const limiter = rateLimit({
     );
   },
 });
-app.use("/api", limiter);
+app.use("/api/", limiter);
 
 //=================== END OF MIDDLEWARE===========
 
@@ -92,6 +100,18 @@ io.on("connection", (socket) => {
   });
 });
 
+// ================== DATABASE EVENT SYNCHRONIZATION ==================
+// Drop the legacy rigid `phone_1` unique index if it lingers from an older schema.
+mongoose.connection.once("open", async () => {
+  try {
+    console.log("🔍 Checking and cleaning stale collection indexes...");
+    await mongoose.connection.db.collection("users").dropIndex("phone_1");
+    console.log("✅ Stale index 'phone_1' successfully dropped.");
+  } catch (err) {
+    console.log("ℹ️ Index drop sync note:", err.message);
+  }
+});
+
 // ================== START SERVER ==================
 const PORT = process.env.PORT || 5000;
 
@@ -99,12 +119,15 @@ async function bootstrap() {
   if (!process.env.SESSION_SECRET) {
     throw new Error("SESSION_SECRET is required");
   }
+  if (!process.env.MONGO_URI) {
+    throw new Error("Missing MONGO_URI environment variable");
+  }
 
   await connectRedis();
 
   /**
-   * Session cookies are required because OTP state is stored on the server side
-   * (`req.session.pending_otp`) in the current auth implementation.
+   * Session cookies are required because admin OTP 2FA state is stored on the
+   * server side in the current admin auth implementation.
    */
   app.use(
     session({
@@ -125,9 +148,15 @@ async function bootstrap() {
     }),
   );
 
-  // ================== ROUTES ==================
+  // ================== APPLICATION ROUTES ==================
   app.use("/api/auth", authRoutes);
   app.use("/api/users", userRoutes);
+  app.use("/api", mainRoutes);
+  app.use("/api", bookingRoutes);
+  app.use("/api", paystackRoutes);
+
+  // ================== ADMIN ROUTES (mounted in Phase 2) ==================
+  // [ADMIN ROUTES PLACEHOLDER]
 
   // Health check
   app.get("/", (req, res) => {
@@ -139,7 +168,7 @@ async function bootstrap() {
 
   // ================== GLOBAL ERROR HANDLER ==================
   app.use((err, req, res, next) => {
-    console.error(err);
+    console.error("🔴 GLOBAL APP ERROR:", err);
 
     return res.status(err.status || 500).json(
       errorResponse({
@@ -150,10 +179,13 @@ async function bootstrap() {
     );
   });
 
-  await mongoose.connect(process.env.MONGO_URI);
+  await mongoose.connect(process.env.MONGO_URI, {
+    // Throw a real error if a query takes longer than 5 seconds.
+    serverSelectionTimeoutMS: 5000,
+  });
   console.log("✅ MongoDB connected");
 
-  server.listen(PORT, () => {
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Server running on port ${PORT}`);
   });
 }

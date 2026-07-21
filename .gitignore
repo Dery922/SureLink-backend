@@ -1,3 +1,29 @@
-.env
+# Dependencies
 node_modules/
-.env.example
+
+# Environment (keep the example template tracked)
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+build/
+
+# Hidden tool dirs (.claude, .qwen, .cursor, .opencode, .yarn, etc.)
+.*/
+!.gitignore
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Uploads (runtime artifacts)
+uploads/*
+!uploads/.gitkeep
+
+# Editor / OS artifacts
+*.code-workspace
+.DS_Store

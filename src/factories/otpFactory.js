@@ -9,32 +9,29 @@ export class OtpFactory {
   /**
    * Create an OTP payload from input
    */
-  static createOtpPayload({
-    phone,
-    fullName,
-    email,
-    type = "customer",
-  }) {
-    if (!phone) {
-      throw new AppError("Phone number is required", 400, "VALIDATION_ERROR");
-    }
-
-    if (!fullName) {
-      throw new AppError("Full name is required", 400, "VALIDATION_ERROR");
-    }
-
-    if (!ALLOWED_TYPES.has(type)) {
-      throw new AppError("Invalid user type", 400, "VALIDATION_ERROR");
-    }
-
-    return {
-      phone,
-      full_name: String(fullName).trim(),
-      email: email?.trim()?.toLowerCase() || null,
-      type,
-    };
+static createOtpPayload({
+  phone,
+  email,
+  type = "customer",
+}) {
+  if (!phone && !email) {
+    throw new AppError(
+      "Either phone or email is required",
+      400,
+      "VALIDATION_ERROR"
+    );
   }
 
+  if (!ALLOWED_TYPES.has(type)) {
+    throw new AppError("Invalid user type", 400, "VALIDATION_ERROR");
+  }
+
+  return {
+    phone,
+    email: email?.trim()?.toLowerCase() || null,
+    type,
+  };
+}
   /**
    * Create an event payload for OTP requested
    */
