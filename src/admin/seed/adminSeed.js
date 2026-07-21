@@ -100,8 +100,10 @@ async function seedAdmins() {
     });
 
     console.log(`✅ Created ${account.role} — ${email}`);
-    // Log the password only in seed output, clearly marked as dev-only.
-    console.log(`   ⚠️  DEV ONLY password: ${password}`);
+    // Log the password only outside production, clearly marked as dev-only.
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`   ⚠️  DEV ONLY password: ${password}`);
+    }
     created++;
   }
 

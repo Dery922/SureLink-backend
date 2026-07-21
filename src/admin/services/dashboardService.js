@@ -186,7 +186,7 @@ async function operationsStats() {
 
 async function superAdminActivity() {
   const [recentProviders, recentAdmins] = await Promise.all([
-    User.find({ type: "provider" })
+    User.find({ roles: "provider" })
       .sort({ createdAt: -1 })
       .limit(3)
       .select("name email status createdAt")
@@ -234,12 +234,12 @@ async function superAdminActivity() {
 
 async function providerManagementActivity() {
   const [pendingProviders, recentProviders] = await Promise.all([
-    User.find({ type: "provider", status: "verification_pending" })
+    User.find({ roles: "provider", status: "verification_pending" })
       .sort({ createdAt: -1 })
       .limit(3)
       .select("name email createdAt")
       .lean(),
-    User.find({ type: "provider", status: { $ne: "verification_pending" } })
+    User.find({ roles: "provider", status: { $ne: "verification_pending" } })
       .sort({ createdAt: -1 })
       .limit(2)
       .select("name email status createdAt")

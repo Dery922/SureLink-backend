@@ -6,28 +6,32 @@ import { AppError } from "./errors.js";
  */
 export class UserFactory {
   /**
-   * Create a new user object for database insertion
+   * Create a new user object for database insertion.
+   *
+   * A user needs at least one identifier (phone OR email). `channel` records
+   * which one was OTP-verified so the matching verification flag is set.
    */
   static createUserPayload({
     phone,
     email,
     type,
     fullName,
+    channel,
   }) {
-    if (!phone || !fullName || !type) {
-      throw new AppError("Phone, fullName, and type are required", 400, "VALIDATION_ERROR");
+    if ((!phone && !email) || !fullName || !type) {
+      throw new AppError("An identifier (phone or email), fullName, and type are required", 400, "VALIDATION_ERROR");
     }
 
+    const now = new Date();
     return {
-      phone,
+      phone: phone || undefined,
       email: email || undefined,
-      type,
-      roles: ["user"],
+      roles: [type],
       status: "verification_pending",
       name: this.createNameObject(fullName),
       verification: {
-        phone: { verified: true, verified_at: new Date() },
-        email: { verified: false },
+        phone: { verified: channel === "phone", verified_at: channel === "phone" ? now : undefined },
+        email: { verified: channel === "email", verified_at: channel === "email" ? now : undefined },
       },
     };
   }
@@ -56,9 +60,9 @@ export class UserFactory {
 
     return {
       id: user._id,
-      phone: user.phone,
+      phone: user.phone || null,
       email: user.email || null,
-      type: user.type,
+      roles: user.roles || [],
       status: user.status,
       name: user.name,
     };

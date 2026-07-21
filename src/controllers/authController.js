@@ -3,10 +3,10 @@ import { successResponse } from "../services/apiResponse.js";
 import {
   logoutAllSessions,
   logoutSession,
-  normalizeAndValidatePhone,
   prepareOtpPayload,
   refreshUserSession,
   registerOrLoginUser,
+  resolveIdentifier,
 } from "../services/authService.js";
 import { issueOtp, verifyOtp } from "../services/otpService.js";
 
@@ -44,10 +44,11 @@ export async function requestOtp(req, res, next) {
 /**
  * Verify a user-provided OTP and complete registration/login.
  *
- * - Expects: `req.body.phone`, `req.body.otp`
+ * - Expects: `req.body.identifier` (phone OR email) or explicit `phone`/`email`,
+ *   plus `req.body.otp`.
  * - Notes:
- *   - Phone normalization is centralized in `normalizeAndValidatePhone` so all
- *     auth flows treat identifiers consistently.
+ *   - Identifier resolution is centralized in `resolveIdentifier` so all auth
+ *     flows treat phone/email identifiers consistently.
  *   - OTP is coerced to string to avoid subtle numeric issues (e.g. leading
  *     zeros, number parsing).
  * - Delegates: OTP verification to `verifyOtp`, user creation/session issuance
@@ -55,15 +56,14 @@ export async function requestOtp(req, res, next) {
  */
 export async function verifyOtpAndRegister(req, res, next) {
   try {
-    const phone = req.body?.phone;
     const otp = String(req.body?.otp || "");
 
-    if (!phone || !otp) {
-      throw new AppError("Phone and OTP are required", 400, "VALIDATION_ERROR");
+    if (!otp) {
+      throw new AppError("OTP is required", 400, "VALIDATION_ERROR");
     }
 
-    const normalizedPhone = normalizeAndValidatePhone(phone);
-    const verifiedPayload = verifyOtp(req, { phone: normalizedPhone, otp });
+    const { identifier } = resolveIdentifier(req.body);
+    const verifiedPayload = verifyOtp(req, { identifier, otp });
     const result = await registerOrLoginUser({
       ...verifiedPayload,
       ip: req.ip,

@@ -6,6 +6,9 @@
 # Dependencies
 node_modules/
 
+# Uploaded provider verification documents (private, served via signed URLs)
+uploads/
+
 # Hidden tool directories (AI assistants, editors, etc.)
 .*/
 

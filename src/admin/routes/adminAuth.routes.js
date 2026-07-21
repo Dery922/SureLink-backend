@@ -1,26 +1,29 @@
 import { Router } from "express";
-import { login, logout, refresh, me, verifyOTP, resendOTP } from "../controllers/adminAuthController.js";
+import rateLimit from "express-rate-limit";
+import { login, logout, refresh, me } from "../controllers/adminAuthController.js";
 import {
   validateAdminLogin,
   validateAdminSessionToken,
-  validateVerifyOTP,
-  validateResendOTP,
 } from "../middleware/adminAuthValidation.js";
 import { authenticateAdmin } from "../middleware/adminAuth.js";
 
 const router = Router();
 
-// Step 1 — validate email + password, send OTP
-router.post("/login", validateAdminLogin, login);
+// Throttle unauthenticated auth traffic per IP to blunt credential stuffing /
+// brute force. Account lockout is per-account; this covers cross-account spray.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: "Too many attempts. Try again later." },
+});
 
-// Step 2a — verify OTP → issue real session
-router.post("/verify-otp", validateVerifyOTP, verifyOTP);
-
-// Step 2b — resend OTP (invalidates old code, issues new pending_token)
-router.post("/resend-otp", validateResendOTP, resendOTP);
+// Validate email + password → issue a session
+router.post("/login", authLimiter, validateAdminLogin, login);
 
 // Session management (require a valid session token in body)
-router.post("/refresh", validateAdminSessionToken, refresh);
+router.post("/refresh", authLimiter, validateAdminSessionToken, refresh);
 router.post("/logout", validateAdminSessionToken, logout);
 
 // Protected — requires active session via Authorization: Bearer header

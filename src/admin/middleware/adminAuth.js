@@ -5,13 +5,14 @@ import { AppError } from "../../services/errors.js";
  * authenticateAdmin — session verification middleware.
  *
  * Reads the bearer token from the Authorization header, verifies it against the
- * admin session store in Redis, and attaches the resolved admin and session to
+ * admin session store, and attaches the resolved admin and session to
  * the request object so downstream handlers don't need to repeat the lookup.
  *
  * AppSec notes:
  * - Token is read from Authorization header (Bearer scheme) — never from query
  *   strings, which would be logged by proxies/servers.
- * - The raw token is never logged or stored; only the SHA-256 hash reaches Redis.
+ * - The raw token is never logged or stored; only the SHA-256 hash reaches the
+ *   session store.
  * - An inactive account invalidates the session even if the token is valid.
  * - Generic 401 messages prevent leaking whether the token exists or is expired.
  *

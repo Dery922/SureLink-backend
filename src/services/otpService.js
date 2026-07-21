@@ -36,7 +36,9 @@ function generateOtp() {
 export function issueOtp(req, payload) {
   const otp = generateOtp();
   req.session.pending_otp = {
-    phone: payload.phone,
+    identifier: payload.identifier,
+    channel: payload.channel,
+    phone: payload.phone || null,
     full_name: payload.full_name,
     email: payload.email || null,
     type: payload.type || "customer",
@@ -46,7 +48,8 @@ export function issueOtp(req, payload) {
   };
 
   const response = {
-    phone: payload.phone,
+    identifier: payload.identifier,
+    channel: payload.channel,
     expires_in_seconds: OTP_TTL_MS / 1000,
   };
 
@@ -55,7 +58,8 @@ export function issueOtp(req, payload) {
   }
 
   publishEvent("auth.otp.requested", {
-    phone: payload.phone,
+    identifier: payload.identifier,
+    channel: payload.channel,
     expires_in_seconds: response.expires_in_seconds,
     requested_at: new Date().toISOString(),
   });
@@ -69,14 +73,14 @@ export function issueOtp(req, payload) {
  * On success, clears `pending_otp` and returns a verified payload for the auth
  * service to consume (register/login).
  */
-export function verifyOtp(req, { phone, otp }) {
+export function verifyOtp(req, { identifier, otp }) {
   const pending = req.session.pending_otp;
   if (!pending) {
     throw new AppError("No OTP request found for this session", 400, "AUTH_OTP_NOT_REQUESTED");
   }
 
-  if (pending.phone !== phone) {
-    throw new AppError("OTP phone mismatch", 400, "AUTH_OTP_PHONE_MISMATCH");
+  if (pending.identifier !== identifier) {
+    throw new AppError("OTP identifier mismatch", 400, "AUTH_OTP_IDENTIFIER_MISMATCH");
   }
 
   if (Date.now() > pending.expires_at) {
@@ -97,7 +101,9 @@ export function verifyOtp(req, { phone, otp }) {
   }
 
   const verifiedPayload = {
-    phone: pending.phone,
+    identifier: pending.identifier,
+    channel: pending.channel,
+    phone: pending.phone || null,
     full_name: pending.full_name,
     email: pending.email,
     type: pending.type,
@@ -105,7 +111,8 @@ export function verifyOtp(req, { phone, otp }) {
 
   req.session.pending_otp = null;
   publishEvent("auth.otp.verified", {
-    phone: verifiedPayload.phone,
+    identifier: verifiedPayload.identifier,
+    channel: verifiedPayload.channel,
     verified_at: new Date().toISOString(),
   });
   return verifiedPayload;

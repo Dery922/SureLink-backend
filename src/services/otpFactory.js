@@ -7,16 +7,22 @@ const ALLOWED_TYPES = new Set(["customer", "provider", "driver", "business"]);
  */
 export class OtpFactory {
   /**
-   * Create an OTP payload from input
+   * Create an OTP payload from input.
+   *
+   * A user is identified by a single `identifier` (phone OR email) with a
+   * `channel` recording which. `phone`/`email` carry the resolved values so the
+   * User document can be created with whichever was provided.
    */
   static createOtpPayload({
+    identifier,
+    channel,
     phone,
-    fullName,
     email,
+    fullName,
     type = "customer",
   }) {
-    if (!phone) {
-      throw new AppError("Phone number is required", 400, "VALIDATION_ERROR");
+    if (!identifier) {
+      throw new AppError("Phone or email is required", 400, "VALIDATION_ERROR");
     }
 
     if (!fullName) {
@@ -28,7 +34,9 @@ export class OtpFactory {
     }
 
     return {
-      phone,
+      identifier,
+      channel,
+      phone: phone || null,
       full_name: String(fullName).trim(),
       email: email?.trim()?.toLowerCase() || null,
       type,

@@ -13,6 +13,7 @@ import { errorResponse } from "./src/services/apiResponse.js";
 // Routes
 import authRoutes from "./src/services/auth.routes.js";
 import userRoutes from "./src/services/user.routes.js";
+import providerApplicationRoutes from "./src/services/providerApplication.routes.js";
 import { initializeAuthEventHandlers } from "./src/services/authEvents.js";
 
 // Admin module
@@ -22,6 +23,10 @@ import adminOperationsRoutes from "./src/admin/routes/operations.routes.js";
 import adminManagementRoutes from "./src/admin/routes/adminManagement.routes.js";
 import adminSettingsRoutes from "./src/admin/routes/settings.routes.js";
 import adminDashboardRoutes from "./src/admin/routes/dashboard.routes.js";
+import adminBookingsRoutes from "./src/admin/routes/bookings.routes.js";
+import adminTransactionsRoutes from "./src/admin/routes/transactions.routes.js";
+import adminCustomersRoutes from "./src/admin/routes/customers.routes.js";
+import adminVerificationsRoutes from "./src/admin/routes/verifications.routes.js";
 import { initializeAdminEventHandlers } from "./src/admin/events/adminEvents.js";
 import { connectRedis, getRedisClient } from "./src/services/redisClient.js";
 
@@ -47,10 +52,17 @@ const app = express();
 const server = http.createServer(app);
 const redisClient = getRedisClient();
 
+// Shared CORS allowlist — used by both the HTTP layer and Socket.IO so a
+// wildcard never slips into either. Falls back to local dev origins.
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+  : [process.env.FRONTEND_URL || "http://localhost:3000", "http://localhost:5173"];
+
 // ================== SOCKET.IO ==================
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: allowedOrigins,
+    credentials: true,
   },
 });
 
@@ -64,9 +76,7 @@ app.use(express.urlencoded({ extended: true }));
 // CORS
 app.use(
   cors({
-    origin: process.env.ALLOWED_ORIGINS
-      ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
-      : [process.env.FRONTEND_URL || "http://localhost:3000", "http://localhost:5173"],
+    origin: allowedOrigins,
     credentials: true, // Required for session cookies
     optionsSuccessStatus: 200,
   })
@@ -122,6 +132,7 @@ async function bootstrap() {
   // ================== ROUTES ==================
   app.use("/api/auth", authRoutes);
   app.use("/api/users", userRoutes);
+  app.use("/api/providers", providerApplicationRoutes);
 
   // Admin module
   app.use("/api/admin/auth", adminAuthRoutes);
@@ -130,6 +141,10 @@ async function bootstrap() {
   app.use("/api/admin/admins", adminManagementRoutes);
   app.use("/api/admin/settings", adminSettingsRoutes);
   app.use("/api/admin/dashboard", adminDashboardRoutes);
+  app.use("/api/admin/bookings", adminBookingsRoutes);
+  app.use("/api/admin/transactions", adminTransactionsRoutes);
+  app.use("/api/admin/customers", adminCustomersRoutes);
+  app.use("/api/admin/verifications", adminVerificationsRoutes);
 
   // Health check
   app.get("/", (req, res) => {

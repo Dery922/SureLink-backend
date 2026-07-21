@@ -24,7 +24,7 @@ export class AdminFactory {
   }
 
   /**
-   * Hash a token with SHA-256 before storing in Redis.
+   * Hash a token with SHA-256 before storing it in the session store.
    * Only the hash ever touches the database — raw tokens stay in memory.
    */
   static hashToken(token) {
@@ -50,7 +50,7 @@ export class AdminFactory {
   }
 
   /**
-   * Build the full session payload for Redis insertion.
+   * Build the full session payload for persistence.
    */
   static createSessionPayload({ adminId, role, ip, userAgent }) {
     if (!adminId || !role) {

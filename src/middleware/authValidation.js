@@ -12,10 +12,10 @@ function isBlank(value) {
  * support checks happen deeper in the auth service layer.
  */
 export function validateRequestOtp(req, res, next) {
-  const { phone, full_name: fullNameSnake, fullName, type } = req.body || {};
+  const { identifier, phone, email, full_name: fullNameSnake, fullName, type } = req.body || {};
 
-  if (isBlank(phone)) {
-    return next(new AppError("Phone number is required", 400, "VALIDATION_ERROR"));
+  if (isBlank(identifier) && isBlank(phone) && isBlank(email)) {
+    return next(new AppError("Phone or email is required", 400, "VALIDATION_ERROR"));
   }
 
   if (isBlank(fullNameSnake) && isBlank(fullName)) {
@@ -36,10 +36,14 @@ export function validateRequestOtp(req, res, next) {
  * (e.g. leading zeros).
  */
 export function validateVerifyOtp(req, res, next) {
-  const { phone, otp } = req.body || {};
+  const { identifier, phone, email, otp } = req.body || {};
 
-  if (isBlank(phone) || isBlank(otp)) {
-    return next(new AppError("Phone and OTP are required", 400, "VALIDATION_ERROR"));
+  if (isBlank(identifier) && isBlank(phone) && isBlank(email)) {
+    return next(new AppError("Phone or email is required", 400, "VALIDATION_ERROR"));
+  }
+
+  if (isBlank(otp)) {
+    return next(new AppError("OTP is required", 400, "VALIDATION_ERROR"));
   }
 
   if (!/^\d{6}$/.test(String(otp))) {

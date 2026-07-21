@@ -30,14 +30,19 @@ const pointSchema = new Schema({
 // ========== MAIN USER ==========
 const userSchema = new Schema({
   // ---------- Identity ----------
+  // Either phone OR email is sufficient to identify a user (see the
+  // at-least-one validator below). Both are unique+sparse so accounts can be
+  // created via phone-OTP or email-OTP.
   phone: {
     type: String,
-    required: true,
+    required: false,
     unique: true,
+    sparse: true,
     index: true,
   },
   email: {
     type: String,
+    unique: true,
     sparse: true, // allows null but still unique
   },
 
@@ -88,9 +93,16 @@ const userSchema = new Schema({
   // ---------- Provider ----------
   provider_profile: {
     category: String,
+    secondary_category: String,
+    service_area: String,
     experience_years: Number,
     hourly_rate: Number,
     service_radius_km: Number,
+    bio: String,
+    base_price: Number,
+    availability: Boolean,
+    id_type: String,
+    id_number: String,
   },
 
   // ---------- Driver ----------
@@ -159,5 +171,14 @@ const userSchema = new Schema({
 
 },
   { timestamps: true });
+
+// Require at least one primary identifier. Phone and email are both optional
+// individually, but a user must have one of them to be reachable/loginable.
+userSchema.pre("validate", function requirePrimaryIdentifier(next) {
+  if (!this.phone && !this.email) {
+    this.invalidate("phone", "Either phone or email is required");
+  }
+  next();
+});
 
 export default mongoose.model("User", userSchema);

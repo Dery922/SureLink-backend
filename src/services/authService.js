@@ -49,20 +49,50 @@ async function createSessionForUser({ userId, ip, user_agent }) {
 /**
  * Prepare and validate the payload needed to issue an OTP.
  *
- * Accepts both `full_name` and `fullName` to be tolerant of client conventions.
+ * Accepts both `full_name` and `fullName` to be tolerant of client conventions,
+ * and a single `identifier` (phone OR email) or explicit `phone`/`email` fields.
  */
 export async function prepareOtpPayload(input) {
-  const phone = normalizeGhanaPhone(input.phone);
-  validateNormalizedPhone(phone);
-
-  const fullName = String(input.full_name || input.fullName).trim();
+  const { identifier, channel, phone, email } = resolveIdentifier(input);
+  const fullName = String(input.full_name || input.fullName || "").trim();
 
   return OtpFactory.createOtpPayload({
+    identifier,
+    channel,
     phone,
+    email,
     fullName,
-    email: input.email,
     type: input.type,
   });
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Resolve a login identifier into a normalized `{ identifier, channel, phone,
+ * email }` shape. Accepts a single `identifier` (phone or email) or explicit
+ * `phone`/`email` fields; the first non-blank of identifier→phone→email wins.
+ *
+ * An identifier containing `@` is treated as email (lowercased); otherwise it is
+ * normalized/validated as a Ghana phone number. The `channel` records which one
+ * so downstream code can mark the matching verification flag.
+ */
+export function resolveIdentifier(input) {
+  const raw = String(input?.identifier ?? input?.phone ?? input?.email ?? "").trim();
+  if (!raw) {
+    throw new AppError("Phone or email is required", 400, "VALIDATION_ERROR");
+  }
+
+  if (raw.includes("@")) {
+    const emailNorm = raw.toLowerCase();
+    if (!EMAIL_RE.test(emailNorm)) {
+      throw new AppError("A valid email is required", 400, "AUTH_INVALID_EMAIL");
+    }
+    return { identifier: emailNorm, channel: "email", phone: null, email: emailNorm };
+  }
+
+  const phoneNorm = normalizeAndValidatePhone(raw);
+  return { identifier: phoneNorm, channel: "phone", phone: phoneNorm, email: null };
 }
 
 /**
@@ -93,7 +123,13 @@ export function normalizeAndValidatePhone(phoneInput) {
  * API responses.
  */
 export async function registerOrLoginUser(payload) {
-  let user = await userRepository.findByPhone(payload.phone);
+  let user = null;
+  if (payload.phone) {
+    user = await userRepository.findByPhone(payload.phone);
+  }
+  if (!user && payload.email) {
+    user = await userRepository.findByEmail(payload.email);
+  }
   let userState = "existing";
 
   if (!user) {
@@ -102,6 +138,7 @@ export async function registerOrLoginUser(payload) {
       email: payload.email,
       type: payload.type,
       fullName: payload.full_name,
+      channel: payload.channel,
     });
 
     user = await userRepository.create(userPayload);
@@ -109,7 +146,8 @@ export async function registerOrLoginUser(payload) {
 
     publishEvent("auth.user.created", {
       user_id: user._id.toString(),
-      phone: user.phone,
+      phone: user.phone || null,
+      email: user.email || null,
       created_at: new Date().toISOString(),
     });
   }
