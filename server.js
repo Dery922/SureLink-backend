@@ -14,6 +14,9 @@ import { errorResponse } from "./src/services/apiResponse.js";
 import authRoutes from "./src/services/auth.routes.js";
 import userRoutes from "./src/services/user.routes.js";
 import providerApplicationRoutes from "./src/services/providerApplication.routes.js";
+import bookingRoutes from "./src/services/booking.routes.js";
+import mainRoutes from "./src/services/main.routes.js";
+import paystackRoutes from "./src/services/paystack.routes.js";
 import { initializeAuthEventHandlers } from "./src/services/authEvents.js";
 
 // Admin module
@@ -133,6 +136,9 @@ async function bootstrap() {
   app.use("/api/auth", authRoutes);
   app.use("/api/users", userRoutes);
   app.use("/api/providers", providerApplicationRoutes);
+  app.use("/api/bookings", bookingRoutes);
+  app.use("/api/main", mainRoutes);
+  app.use("/api/paystack", paystackRoutes);
 
   // Admin module
   app.use("/api/admin/auth", adminAuthRoutes);
