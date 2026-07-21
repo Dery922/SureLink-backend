@@ -14,9 +14,14 @@ class AuthEventBus extends EventEmitter {
 
 const authEventBusInstance = new AuthEventBus();
 
-// 🔑 THE FIX: Explicitly export this as a named constant!
+// Publish an event to all subscribers.
 export const publishEvent = (eventName, eventData) => {
   authEventBusInstance.publishEvent(eventName, eventData);
+};
+
+// Subscribe a handler to an event (used by the admin audit-log handlers).
+export const subscribeEvent = (eventName, handler) => {
+  authEventBusInstance.on(eventName, handler);
 };
 
 // Keep default export for the instance if needed elsewhere

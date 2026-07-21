@@ -19,6 +19,15 @@ import mainRoutes from "./src/modules/main/main.routes.js";
 import bookingRoutes from "./src/modules/bookingRoutes.js";
 import paystackRoutes from "./src/modules/paystackRoutes.js";
 
+// Admin module routes
+import adminAuthRoutes from "./src/admin/routes/adminAuth.routes.js";
+import adminProvidersRoutes from "./src/admin/routes/providers.routes.js";
+import adminOperationsRoutes from "./src/admin/routes/operations.routes.js";
+import adminManagementRoutes from "./src/admin/routes/adminManagement.routes.js";
+import adminSettingsRoutes from "./src/admin/routes/settings.routes.js";
+import adminDashboardRoutes from "./src/admin/routes/dashboard.routes.js";
+import { initializeAdminEventHandlers } from "./src/admin/events/adminEvents.js";
+
 import { connectRedis, getRedisClient } from "./src/utils/redisClient.js";
 
 // Socket (for future use)
@@ -37,6 +46,9 @@ import { Server } from "socket.io";
 const app = express();
 const server = http.createServer(app);
 const redisClient = getRedisClient();
+
+// Register admin audit-log event handlers (synchronous subscriptions).
+initializeAdminEventHandlers();
 
 // ================== SOCKET.IO ==================
 const io = new Server(server, {
@@ -155,8 +167,13 @@ async function bootstrap() {
   app.use("/api", bookingRoutes);
   app.use("/api", paystackRoutes);
 
-  // ================== ADMIN ROUTES (mounted in Phase 2) ==================
-  // [ADMIN ROUTES PLACEHOLDER]
+  // ================== ADMIN ROUTES ==================
+  app.use("/api/admin/auth", adminAuthRoutes);
+  app.use("/api/admin/providers", adminProvidersRoutes);
+  app.use("/api/admin/operations", adminOperationsRoutes);
+  app.use("/api/admin/admins", adminManagementRoutes);
+  app.use("/api/admin/settings", adminSettingsRoutes);
+  app.use("/api/admin/dashboard", adminDashboardRoutes);
 
   // Health check
   app.get("/", (req, res) => {
