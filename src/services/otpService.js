@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { AppError } from "./errors.js";
 import { publishEvent } from "./eventBus.js";
+import { sendOtpEmail } from "./mailService.js";
 
 /**
  * OTP service.
@@ -32,8 +33,12 @@ function generateOtp() {
  * Security notes:
  * - We only store a hash of the OTP.
  * - `otp_preview` is intentionally hidden in production.
+ *
+ * Delivery: for the email channel we attempt a Brevo send (see mailService).
+ * Delivery is best-effort — a failure is logged but never blocks the auth flow,
+ * so a missing BREVO_API_KEY in dev falls back to `otp_preview`.
  */
-export function issueOtp(req, payload) {
+export async function issueOtp(req, payload) {
   const otp = generateOtp();
   req.session.pending_otp = {
     identifier: payload.identifier,
@@ -63,6 +68,18 @@ export function issueOtp(req, payload) {
     expires_in_seconds: response.expires_in_seconds,
     requested_at: new Date().toISOString(),
   });
+
+  // Best-effort email delivery. Guarded so a delivery failure (e.g. missing
+  // BREVO_API_KEY) is logged but does not block issuing the OTP.
+  const emailTarget =
+    payload.email || (payload.channel === "email" ? payload.identifier : null);
+  if (emailTarget) {
+    try {
+      await sendOtpEmail({ to: emailTarget, otp });
+    } catch (emailError) {
+      console.error("OTP email delivery failed:", emailError.message);
+    }
+  }
 
   return response;
 }

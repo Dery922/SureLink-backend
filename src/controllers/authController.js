@@ -28,7 +28,7 @@ import { issueOtp, verifyOtp } from "../services/otpService.js";
 export async function requestOtp(req, res, next) {
   try {
     const payload = await prepareOtpPayload(req.body);
-    const otpResult = issueOtp(req, payload);
+    const otpResult = await issueOtp(req, payload);
 
     return res.status(200).json(
       successResponse({
