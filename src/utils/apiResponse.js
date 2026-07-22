@@ -1,25 +1,37 @@
+// src/utils/apiResponse.js
+
 /**
- * API response helpers.
- *
- * All endpoints should return a consistent envelope so frontend clients can
- * reliably parse results.
+ * Generates a standardized successful API response object
+ * @param {Object} options
+ * @param {string} options.message - Success message description
+ * @param {Object|Array|null} [options.data=null] - Payload object returned to client
+ * @returns {Object} Standardized success response structure
  */
-export function successResponse({ message, data = null, meta = null }) {
+export function successResponse({ message, data = null }) {
   return {
     success: true,
     message,
     data,
-    meta,
   };
 }
 
-export function errorResponse({ message, code, details = null }) {
+/**
+ * Generates a standardized error API response object
+ * @param {Object} options
+ * @param {string} options.message - Error message description
+ * @param {string} [options.code="INTERNAL_ERROR"] - Business logic error identification string
+ * @param {Object|Array|null} [options.details=null] - Validation errors array or extra debugging fields
+ * @returns {Object} Standardized error response structure
+ */
+export function errorResponse({
+  message,
+  code = "INTERNAL_ERROR",
+  details = null,
+}) {
   return {
     success: false,
     message,
-    error: {
-      code,
-      details,
-    },
+    code,
+    details,
   };
 }

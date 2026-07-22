@@ -1,51 +1,55 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
+
 import {
-  logout,
-  logoutAll,
+  acceptTerms,
   refreshSession,
   requestOtp,
+  selectRole,
+  saveProviderDraft,
   verifyOtpAndRegister,
+  saveProviderProfile,
+  logoutUser,
+  getMe,
+  getMarketplaceProviders,
+  getCurrentUser,
+  createCustomer,
 } from "../../controllers/authController.js";
 import { errorResponse } from "../../utils/apiResponse.js";
 import {
+  authMiddleware,
   validateRequestOtp,
-  validateSessionTokenRequest,
   validateVerifyOtp,
 } from "./auth.validation.middleware.js";
 
 const router = Router();
-
-/**
- * Auth route-level rate limit.
- *
- * This is intentionally stricter than the global `/api` limiter in `server.js`
- * because OTP endpoints are high-risk for brute-force / SMS abuse.
- */
-const authLimiter = rateLimit({
-  max: 20,
-  windowMs: 15 * 60 * 1000,
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (req, res) => {
-    return res.status(429).json(
-      errorResponse({
-        message: "Too many authentication requests. Please try again later.",
-        code: "RATE_LIMIT_EXCEEDED",
-      }),
-    );
-  },
+router.use((req, res, next) => {
+  console.log("🔥 AUTH ROUTER HIT:", req.method, req.path);
+  next();
 });
 
-/**
- * Auth module routes.
- *
- * Validation middleware keeps controllers thin and consistent.
- */
-router.post("/request-otp", authLimiter, validateRequestOtp, requestOtp);
-router.post("/verify-otp", authLimiter, validateVerifyOtp, verifyOtpAndRegister);
-router.post("/refresh", authLimiter, validateSessionTokenRequest, refreshSession);
-router.post("/logout", authLimiter, validateSessionTokenRequest, logout);
-router.post("/logout-all", authLimiter, validateSessionTokenRequest, logoutAll);
+router.get("/me", authMiddleware, getMe);
 
+router.post("/request-otp", validateRequestOtp, requestOtp);
+router.post(
+  "/verify-otp",
+
+  validateVerifyOtp,
+  verifyOtpAndRegister,
+);
+router.post("/refresh", refreshSession);
+
+// router.post("/logout-all", authLimiter, validateSessionTokenRequest, logoutAll);
+router.post("/select-role", authMiddleware, selectRole);
+router.post("/accept-terms", authMiddleware, acceptTerms);
+// Onboarding Endpoints
+router.post("/provider-profile", authMiddleware, saveProviderProfile);
+
+// 🔑 Add this line right here:
+router.post("/provider-profile/draft", authMiddleware, saveProviderDraft);
+router.get("/get/all/providers", authMiddleware, getMarketplaceProviders);
+router.get("/auth/me", authMiddleware, getCurrentUser);
+router.post("/logout", authMiddleware, logoutUser);
+
+router.patch("/customer-onboarding", authMiddleware, createCustomer);
 export default router;

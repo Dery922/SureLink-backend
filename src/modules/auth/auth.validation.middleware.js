@@ -1,69 +1,114 @@
 import { AppError } from "../../utils/errors.js";
+// import Session from "../../models/Session.js";
+// import { SessionFactory } from "../../factories/sessionFactory.js";
+import jwt from "jsonwebtoken";
 
 function isBlank(value) {
   return value === undefined || value === null || String(value).trim() === "";
 }
 
-/**
- * Validate input for requesting an OTP.
- *
- * Kept intentionally small and dependency-free (no DB calls): it only verifies
- * required fields and basic enum constraints. Phone normalization/network
- * support checks happen deeper in the auth service layer.
- */
 export function validateRequestOtp(req, res, next) {
-  const { phone, full_name: fullNameSnake, fullName, type } = req.body || {};
+  const { identifier, fullName, type } = req.body || {};
 
-  if (isBlank(phone)) {
-    return next(new AppError("Phone number is required", 400, "VALIDATION_ERROR"));
+  if (isBlank(identifier)) {
+    return next(
+      new AppError("Email or phone is required", 400, "VALIDATION_ERROR"),
+    );
   }
 
-  if (isBlank(fullNameSnake) && isBlank(fullName)) {
-    return next(new AppError("Full name is required", 400, "VALIDATION_ERROR"));
-  }
+  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
 
-  if (type !== undefined && !["customer", "provider", "driver", "business"].includes(type)) {
-    return next(new AppError("Invalid user type", 400, "VALIDATION_ERROR"));
+  const isPhone = /^(\+?233|0)\d{9}$/.test(identifier);
+
+  if (!isEmail && !isPhone) {
+    return next(
+      new AppError("Invalid email or phone format", 400, "VALIDATION_ERROR"),
+    );
   }
 
   return next();
 }
 
-/**
- * Validate input for OTP verification.
- *
- * OTP is validated as a 6-digit string to avoid numeric parsing pitfalls
- * (e.g. leading zeros).
- */
 export function validateVerifyOtp(req, res, next) {
-  const { phone, otp } = req.body || {};
+  // 1. Accept either 'identifier' (from emails/phones) or fallback to 'phone'
+  const identifier = req.body.identifier || req.body.phone;
+  const { otp } = req.body || {};
 
-  if (isBlank(phone) || isBlank(otp)) {
-    return next(new AppError("Phone and OTP are required", 400, "VALIDATION_ERROR"));
+  if (isBlank(identifier) || isBlank(otp)) {
+    return next(
+      new AppError(
+        "Identifier (Email/Phone) and OTP are required",
+        400,
+        "VALIDATION_ERROR",
+      ),
+    );
   }
 
+  // 2. Validate format patterns for the identifier
+  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
+  const isPhone = /^(\+?233|0)\d{9}$/.test(identifier);
+
+  if (!isEmail && !isPhone) {
+    return next(
+      new AppError(
+        "Invalid email or phone format for verification",
+        400,
+        "VALIDATION_ERROR",
+      ),
+    );
+  }
+
+  // 3. Validate OTP numeric string constraint
   if (!/^\d{6}$/.test(String(otp))) {
-    return next(new AppError("OTP must be a 6-digit code", 400, "VALIDATION_ERROR"));
+    return next(
+      new AppError("OTP must be a 6-digit code", 400, "VALIDATION_ERROR"),
+    );
   }
+
+  // 4. Overwrite req.body.identifier to make sure it's clean for the controller
+  req.body.identifier = String(identifier).trim().toLowerCase();
 
   return next();
 }
 
-/**
- * Validate requests that require a `session_token` (refresh/logout).
- *
- * The service layer re-validates token shape as a defense-in-depth measure.
- */
-export function validateSessionTokenRequest(req, res, next) {
-  const { session_token: sessionToken } = req.body || {};
+export function authMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization;
 
-  if (isBlank(sessionToken)) {
-    return next(new AppError("session_token is required", 400, "VALIDATION_ERROR"));
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res
+      .status(401)
+      .json({ success: false, message: "Access denied. No token provided." });
   }
 
-  if (!/^[a-f0-9]{64}$/i.test(String(sessionToken))) {
-    return next(new AppError("session_token format is invalid", 400, "VALIDATION_ERROR"));
-  }
+  const token = authHeader.split(" ")[1]; // Safeguard array index extraction
 
-  return next();
+  try {
+    const secretKey =
+      process.env.JWT_SECRET || "fallback_temporary_local_secret_key";
+    const decoded = jwt.verify(token, secretKey);
+
+    console.log("🔓 DECODED MIDDLEWARE TOKEN PAYLOAD:", decoded);
+
+    // Extract ID using a fallback chain to be safe against historical signatures
+    const activeUserId = decoded.id || decoded.userId;
+
+    if (!activeUserId || activeUserId === "undefined") {
+      console.error(
+        "🚨 REJECTED: Decoded payload identity evaluates to undefined.",
+      );
+      return res
+        .status(401)
+        .json({ success: false, message: "Malformed session token context." });
+    }
+
+    // Assign to req.user format required by selectRole controller
+    req.user = { id: String(activeUserId).trim() };
+
+    next();
+  } catch (error) {
+    console.error("❌ MIDDLEWARE FAILURE:", error.message);
+    return res
+      .status(401)
+      .json({ success: false, message: "Invalid or expired token." });
+  }
 }
