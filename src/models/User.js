@@ -117,6 +117,10 @@ const userSchema = new Schema(
         enum: ["not_started", "pending", "approved", "rejected"],
         default: "not_started",
       },
+      // Admin review outcome (set by the admin verifications queue).
+      rejection_reason: String,
+      reviewed_at: Date,
+      reviewed_by: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
       category: String,
       secondaryCategories: [String], // ✨ Added to catch extra service capabilities
       service_area: String, // ✨ Added to store location strings like "East Legon"

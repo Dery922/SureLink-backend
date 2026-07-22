@@ -408,6 +408,9 @@ export async function saveProviderProfile(req, res, next) {
     // Deep merge data fields safely
     user.provider_profile = {
       ...user.provider_profile,
+      // Submitting the profile puts the provider into the admin verification
+      // queue (status was "not_started" until now).
+      verification_status: "pending",
       category: profileDetails.category || user.provider_profile?.category,
       secondaryCategories: profileDetails.secondaryCategory
         ? [profileDetails.secondaryCategory]

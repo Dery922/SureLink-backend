@@ -26,6 +26,10 @@ import adminOperationsRoutes from "./src/admin/routes/operations.routes.js";
 import adminManagementRoutes from "./src/admin/routes/adminManagement.routes.js";
 import adminSettingsRoutes from "./src/admin/routes/settings.routes.js";
 import adminDashboardRoutes from "./src/admin/routes/dashboard.routes.js";
+import adminBookingRoutes from "./src/admin/routes/booking.routes.js";
+import adminCustomerRoutes from "./src/admin/routes/customer.routes.js";
+import adminTransactionRoutes from "./src/admin/routes/transaction.routes.js";
+import adminVerificationRoutes from "./src/admin/routes/verification.routes.js";
 import { initializeAdminEventHandlers } from "./src/admin/events/adminEvents.js";
 
 import { connectRedis, getRedisClient } from "./src/utils/redisClient.js";
@@ -72,10 +76,26 @@ app.use((req, res, next) => {
   next();
 });
 
-// Single CORS configuration allowing cookies/sessions
+// Single CORS configuration allowing cookies/sessions.
+// credentials:true forbids origin:"*", so we reflect the request origin against
+// an allowlist. FRONTEND_URL may be a comma-separated list of dev/prod origins.
+const allowedOrigins = (
+  process.env.FRONTEND_URL ||
+  "http://localhost:3000,http://localhost:5173,http://localhost:5174"
+)
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: (origin, callback) => {
+      // Allow non-browser clients (no Origin header) and allowlisted origins.
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error(`Origin ${origin} not allowed by CORS`));
+    },
     credentials: true,
     optionsSuccessStatus: 200,
   }),
@@ -174,6 +194,10 @@ async function bootstrap() {
   app.use("/api/admin/admins", adminManagementRoutes);
   app.use("/api/admin/settings", adminSettingsRoutes);
   app.use("/api/admin/dashboard", adminDashboardRoutes);
+  app.use("/api/admin/bookings", adminBookingRoutes);
+  app.use("/api/admin/customers", adminCustomerRoutes);
+  app.use("/api/admin/transactions", adminTransactionRoutes);
+  app.use("/api/admin/verifications", adminVerificationRoutes);
 
   // Health check
   app.get("/", (req, res) => {
