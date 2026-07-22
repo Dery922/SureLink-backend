@@ -81,7 +81,7 @@ app.use((req, res, next) => {
 // an allowlist. FRONTEND_URL may be a comma-separated list of dev/prod origins.
 const allowedOrigins = (
   process.env.FRONTEND_URL ||
-  "http://localhost:3000,http://localhost:5173,http://localhost:5174"
+  "http://localhost:3000,http://localhost:3001,http://localhost:5173,http://localhost:5174"
 )
   .split(",")
   .map((o) => o.trim())

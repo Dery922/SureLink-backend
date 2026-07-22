@@ -153,6 +153,7 @@ export async function saveProviderDraft(req, res, next) {
       id_type: profileDetails.idType || user.provider_profile?.id_type,
       id_number: profileDetails.idNumber || user.provider_profile?.id_number,
       avatar_url: profileDetails.avatarUrl || user.provider_profile?.avatar_url,
+      selfie_url: profileDetails.selfieUrl || user.provider_profile?.selfie_url,
       base_price:
         Number(profileDetails.basePrice) ||
         user.provider_profile?.base_price ||
@@ -340,6 +341,35 @@ export async function saveProviderProfile(req, res, next) {
         return res.status(500).json({
           success: false,
           message: "Failed to upload profile picture to cloud storage.",
+        });
+      }
+    }
+
+    // 🚀 CLOUDINARY SELFIE UPLOAD
+    if (
+      profileDetails.selfieUrl &&
+      profileDetails.selfieUrl.startsWith("data:image/")
+    ) {
+      try {
+        const selfieUpload = await cloudinary.uploader.upload(
+          profileDetails.selfieUrl,
+          {
+            folder: "provider_selfies",
+            transformation: [
+              { width: 400, height: 400, crop: "fill", gravity: "face" },
+            ],
+          },
+        );
+
+        user.provider_profile = {
+          ...user.provider_profile,
+          selfie_url: selfieUpload.secure_url,
+        };
+      } catch (uploadErr) {
+        console.error("Cloudinary Selfie Upload Failure:", uploadErr);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to upload verification selfie to cloud storage.",
         });
       }
     }

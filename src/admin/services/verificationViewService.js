@@ -24,7 +24,7 @@ function documents(u) {
     });
   }
 
-  const selfieUrl = pp.avatar_url || u.avatar?.url;
+  const selfieUrl = pp.selfie_url || pp.avatar_url || u.avatar?.url;
   if (selfieUrl) out.push({ type: "selfie", label: "Verification Selfie", url: selfieUrl });
 
   return out;

@@ -127,6 +127,7 @@ const userSchema = new Schema(
       service_radius_km: { type: Number, default: 25 },
       bio: String, // ✨ Added to ensure your biographies do not vanish
       avatar_url: String, // ✨ Added to track provider-specific image avatars
+      selfie_url: String, // Verification selfie for admin review
       id_type: String,
       id_number: String,
       id_doc_url: String,
