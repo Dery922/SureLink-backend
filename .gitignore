@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 node_modules
 
 node_modules/
@@ -7,3 +8,19 @@ build/
 .yarn/
 
 .env
+=======
+# Environment secrets — never commit
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+
+# Hidden tool directories (AI assistants, editors, etc.)
+.*/
+
+# Keep these dot files tracked
+!.gitignore
+!.env.example
+>>>>>>> f35ab1fa21c6ae9e94e4cd7a6ca367d5904c04ba

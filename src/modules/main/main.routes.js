@@ -1,3 +1,4 @@
+// src/routes/mainRoutes.js
 import { Router } from "express";
 import { authMiddleware } from "../auth/auth.validation.middleware.js";
 import { upload } from "../../middleware/uploadMiddlware.js";
@@ -12,17 +13,25 @@ import {
   getProviderById,
   deleteProviderService,
   deleteProviderGallery,
+  updateUserProfile,
 } from "../../controllers/mainController.js";
+import { getAllProviders } from "../../controllers/providersController.js";
 
 const router = Router();
 
-router.get("home", (req, res) => {
-  console.log("Welcome home because all just started and is for testing");
-});
-router.get("/provider/services/:id", authMiddleware, getProviderServices);
+// Move this test route to a separate path or remove it
+// router.get("/home", (req, res) => {
+//   console.log("Welcome home because all just started and is for testing");
+//   res.json({ message: "Welcome home" });
+// });
 
+// IMPORTANT: More specific routes should come FIRST
+router.get("/get/all/categories/providers", getAllProviders);
 router.get("/get/all/providers", getMarketplaceProviders);
 router.get("/get/provider/:id", getProviderById);
+router.get("/provider/services/:id", authMiddleware, getProviderServices);
+
+// Then less specific routes
 router.post("/save/services", authMiddleware, saveProviderServices);
 router.post(
   "/provider/gallery/upload",
@@ -30,7 +39,6 @@ router.post(
   upload.array("images", 10),
   uploadGalleryImages,
 );
-
 router.get("/gallery/user/:userId", authMiddleware, getGalleryByUserId);
 router.delete("/provider/services/:id", authMiddleware, deleteProviderService);
 router.delete(
@@ -38,5 +46,7 @@ router.delete(
   authMiddleware,
   deleteProviderGallery,
 );
+
+router.put("/users/profile/update", authMiddleware, updateUserProfile);
 
 export default router;

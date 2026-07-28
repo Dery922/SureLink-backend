@@ -1,6 +1,14 @@
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
+/**
+ * User model.
+ *
+ * This schema is intentionally broad to support multiple actor types
+ * (customer/provider/driver/business/admin). Keep auth-critical fields stable:
+ * `phone` (unique), `type`, and `verification.phone`.
+ */
+
 // ========== GEO SCHEMA ==========
 const pointSchema = new Schema(
   {

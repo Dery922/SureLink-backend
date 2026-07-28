@@ -1,6 +1,8 @@
 import { AppError } from "../utils/errors.js";
 import { successResponse } from "../utils/apiResponse.js";
 import User from "../models/User.js";
+
+//import { successResponse } from "../services/apiResponse.js";
 import {
   logoutAllSessions,
   logoutSession,
@@ -464,7 +466,6 @@ export async function saveProviderProfile(req, res, next) {
 //export async function // controllers/authController.js
 
 export async function selectRole(req, res) {
-  console.log(req.body.role);
   try {
     const { role } = req.body;
 

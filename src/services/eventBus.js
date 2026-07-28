@@ -1,6 +1,8 @@
 // src/services/eventBus.js
 import { EventEmitter } from "events";
 
+export const subscribeEvent = () => {};
+
 class AuthEventBus extends EventEmitter {
   constructor() {
     super();

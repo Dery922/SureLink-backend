@@ -1,25 +1,40 @@
+import { connectRedis } from "./src/services/redisClient.js";
 import dotenv from "dotenv";
 dotenv.config();
-import express, { application } from "express";
+import express from "express";
 import mongoose from "mongoose";
 import http from "http";
 import cors from "cors";
 import session from "express-session";
 import MongoStore from "connect-mongo";
-import authRoutes from "./src/modules/auth/auth.routes.js";
-import mainRoutes from "./src/modules/main/main.routes.js";
-import bookingRoutes from "./src/modules/bookingRoutes.js";
-import paystackRoutes from "./src/modules/paystackRoutes.js";
-// Security
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-
-// Routes (Uncomment these when your files are ready)
-// import authRoutes from "./src/modules/auth/auth.routes.js";
-// import userRoutes from "./src/modules/users/user.routes.js";
-
-// Socket (for future use)
 import { Server } from "socket.io";
+import { errorResponse } from "./src/services/apiResponse.js";
+
+// Routes
+import authRoutes from "./src/modules/auth/auth.routes.js";
+import mainRoutes from "./src/modules/main/main.routes.js";
+import activityRoutes from "./src/modules/activityRoutes.js";
+import bookingRoutes from "./src/modules/bookingRoutes.js";
+import paystackRoutes from "./src/modules/paystackRoutes.js";
+import userRoutes from "./src/services/user.routes.js";
+import { initializeAuthEventHandlers } from "./src/services/authEvents.js";
+import providerStatsRoutes from "./src/modules/providerStatsRoutes.js";
+import notificationsRoutes from "./src/modules/notificationsRoutes.js";
+
+// Admin module
+import adminAuthRoutes from "./src/admin/routes/adminAuth.routes.js";
+import adminProvidersRoutes from "./src/admin/routes/providers.routes.js";
+import adminOperationsRoutes from "./src/admin/routes/operations.routes.js";
+import adminManagementRoutes from "./src/admin/routes/adminManagement.routes.js";
+import adminSettingsRoutes from "./src/admin/routes/settings.routes.js";
+import adminDashboardRoutes from "./src/admin/routes/dashboard.routes.js";
+import { initializeAdminEventHandlers } from "./src/admin/events/adminEvents.js";
+
+// Initialize event handlers
+initializeAuthEventHandlers();
+initializeAdminEventHandlers();
 
 const app = express();
 const server = http.createServer(app);
@@ -27,14 +42,15 @@ const server = http.createServer(app);
 // ================== SOCKET.IO ==================
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    credentials: true,
   },
 });
+
 app.set("io", io);
 
 // ================== GLOBAL MIDDLEWARES ==================
 app.set("trust proxy", false);
-// 🔑 FIXED: Set to 10mb once globally so base64 pictures don't throw 413 errors
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
@@ -44,10 +60,17 @@ app.use((req, res, next) => {
   next();
 });
 
-// 🔑 FIXED: Single clean CORS configuration allowing cookies/sessions
+// CORS configuration
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+  : [
+      process.env.FRONTEND_URL || "http://localhost:3000",
+      "http://localhost:5173",
+    ];
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: allowedOrigins,
     credentials: true,
     optionsSuccessStatus: 200,
   }),
@@ -56,7 +79,7 @@ app.use(
 // Security Headers
 app.use(helmet());
 
-// Session Handling & Storage configuration
+// Session Handling
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "default_fallback_secret",
@@ -77,22 +100,33 @@ app.use(
   }),
 );
 
-// Rate limiting (explicitly targeted to security-sensitive routes)
-const limiter = rateLimit({
-  max: 100,
-  windowMs: 15 * 60 * 1000, // 15 mins
-  message: "Too many requests, please try again later.",
-});
-app.use("/api/", limiter);
+// Rate limiting
+// const limiter = rateLimit({
+//   max: 100,
+//   windowMs: 15 * 60 * 1000, // 15 mins
+//   message: "Too many requests, please try again later.",
+// });
+// app.use("/api/", limiter);
 
 // ================== APPLICATION ROUTES ==================
-// Ensure your authRoutes variable is imported and uncommented at the top
 app.use("/api/auth", authRoutes);
 app.use("/api", mainRoutes);
 app.use("/api", bookingRoutes);
 app.use("/api", paystackRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api", providerStatsRoutes);
+app.use("/api", activityRoutes);
+app.use("/api", notificationsRoutes);
 
-// Root Endpoint / Health Check
+// Admin module routes
+app.use("/api/admin/auth", adminAuthRoutes);
+app.use("/api/admin/providers", adminProvidersRoutes);
+app.use("/api/admin/operations", adminOperationsRoutes);
+app.use("/api/admin/admins", adminManagementRoutes);
+app.use("/api/admin/settings", adminSettingsRoutes);
+app.use("/api/admin/dashboard", adminDashboardRoutes);
+
+// Health Check
 app.get("/", (req, res) => {
   return res.status(200).json({
     success: true,
@@ -104,7 +138,6 @@ app.get("/", (req, res) => {
 mongoose.connection.once("open", async () => {
   try {
     console.log("🔍 Checking and cleaning stale collection indexes...");
-    // Force drop old rigid index constraints directly from MongoDB
     await mongoose.connection.db.collection("users").dropIndex("phone_1");
     console.log("✅ Stale index 'phone_1' successfully dropped.");
   } catch (err) {
@@ -124,7 +157,16 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ================== DATA & NETWORK LIFECYCLE MANAGEMENT ==================
+// ================== SOCKET EVENTS ==================
+io.on("connection", (socket) => {
+  console.log("🔌 User connected:", socket.id);
+
+  socket.on("disconnect", () => {
+    console.log("❌ User disconnected:", socket.id);
+  });
+});
+
+// ================== START SERVER ==================
 const PORT = process.env.PORT || 5000;
 
 async function bootstrap() {
@@ -132,16 +174,18 @@ async function bootstrap() {
     throw new Error("Missing MONGO_URI environment variable");
   }
 
-  await mongoose.connect(process.env.MONGO_URI, {
-    // Force Mongoose to throw a real error if a query takes longer than 5 seconds
-    serverSelectionTimeoutMS: 5000,
-  });
+  if (!process.env.SESSION_SECRET) {
+    throw new Error("SESSION_SECRET is required");
+  }
+
+  await mongoose.connect(process.env.MONGO_URI);
   console.log("✅ MongoDB connected");
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(
-      `🚀 Server safely listening across local networks on port ${PORT}`,
-    );
+  await connectRedis();
+  console.log("✅ Redis connected");
+
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log(`🚀 Server running on port ${PORT}`);
   });
 }
 

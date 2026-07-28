@@ -4,6 +4,7 @@ import User from "../models/User.js";
 import Service from "../models/Service.js";
 import cloudinary from "../config/cloudinary.js";
 import Gallery from "../models/Gallery.js";
+import Activity from "../models/Activity.js";
 
 // Upload images to Cloudinary and save to database
 export const uploadGalleryImages = async (req, res) => {
@@ -946,6 +947,370 @@ export const deleteProviderGallery = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to delete image",
+      error: error.message,
+    });
+  }
+};
+
+// Get user activities
+export const getUserActivities = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { limit = 10, page = 1 } = req.query;
+
+    const activities = await Activity.find({
+      userId,
+      isDeleted: false,
+    })
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .skip((parseInt(page) - 1) * parseInt(limit));
+
+    const total = await Activity.countDocuments({
+      userId,
+      isDeleted: false,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: activities,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching activities:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch activities",
+    });
+  }
+};
+
+// Create activity (called from booking creation, etc.)
+export const createActivity = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { type, title, description, amount, status, metadata } = req.body;
+
+    const activity = await Activity.create({
+      userId,
+      type,
+      title,
+      description,
+      amount,
+      status,
+      metadata,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: activity,
+    });
+  } catch (error) {
+    console.error("Error creating activity:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create activity",
+    });
+  }
+};
+
+// Soft delete activity
+export const deleteActivity = async (req, res) => {
+  try {
+    const { activityId } = req.params;
+    const userId = req.user.id;
+
+    const activity = await Activity.findOne({
+      _id: activityId,
+      userId,
+    });
+
+    if (!activity) {
+      return res.status(404).json({
+        success: false,
+        message: "Activity not found",
+      });
+    }
+
+    // Soft delete
+    activity.isDeleted = true;
+    activity.deletedAt = new Date();
+    await activity.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Activity deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting activity:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete activity",
+    });
+  }
+};
+
+// Soft delete all activities
+export const deleteAllActivities = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    await Activity.updateMany(
+      { userId },
+      {
+        isDeleted: true,
+        deletedAt: new Date(),
+      },
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "All activities deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting all activities:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete activities",
+    });
+  }
+};
+
+// Get recent activities (limited for dashboard)
+export const getRecentActivities = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { limit = 5 } = req.query;
+
+    const activities = await Activity.find({
+      userId,
+      isDeleted: false,
+    })
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      message: "Recent activities retrieved successfully",
+      data: activities,
+      count: activities.length,
+    });
+  } catch (error) {
+    console.error("❌ Error fetching recent activities:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch recent activities",
+      error: error.message,
+    });
+  }
+};
+
+export const getActivityStats = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const [total, byType, recent] = await Promise.all([
+      Activity.countDocuments({ userId, isDeleted: false }),
+      Activity.aggregate([
+        { $match: { userId, isDeleted: false } },
+        { $group: { _id: "$type", count: { $sum: 1 } } },
+      ]),
+      Activity.find({ userId, isDeleted: false })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .lean(),
+    ]);
+
+    // Format stats by type
+    const statsByType = {};
+    byType.forEach((item) => {
+      statsByType[item._id] = item.count;
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Activity statistics retrieved successfully",
+      data: {
+        total,
+        byType: statsByType,
+        recent,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error fetching activity stats:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch activity statistics",
+      error: error.message,
+    });
+  }
+};
+
+// Restore all activities
+export const restoreAllActivities = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const result = await Activity.updateMany(
+      { userId, isDeleted: true },
+      {
+        isDeleted: false,
+        deletedAt: null,
+      },
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "All activities restored successfully",
+      data: {
+        restoredCount: result.modifiedCount,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error restoring all activities:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to restore activities",
+      error: error.message,
+    });
+  }
+};
+
+// Restore activity
+export const restoreActivity = async (req, res) => {
+  try {
+    const { activityId } = req.params;
+    const userId = req.user.id;
+
+    const activity = await Activity.findOne({
+      _id: activityId,
+      userId,
+    });
+
+    if (!activity) {
+      return res.status(404).json({
+        success: false,
+        message: "Activity not found",
+      });
+    }
+
+    activity.isDeleted = false;
+    activity.deletedAt = null;
+    await activity.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Activity restored successfully",
+    });
+  } catch (error) {
+    console.error("Error restoring activity:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to restore activity",
+    });
+  }
+};
+
+export const updateUserProfile = async (req, res) => {
+  try {
+    const activeUserId = req.user?._id || req.user?.id;
+
+    if (!activeUserId) {
+      return res.status(401).json({
+        success: false,
+        message: "User session token verification failed",
+      });
+    }
+
+    // Flatten parameters manually into a single safe update map
+    const updateFields = {};
+
+    // 1. Root Level Standard Fields Whitelist
+    if (req.body.name) updateFields.name = req.body.name;
+
+    if (req.body.services) updateFields.services = req.body.services;
+    if (req.body.gallery) updateFields.gallery = req.body.gallery;
+
+    // 2. 🚀 THE CRITICAL FLAT-SET FIX FOR NESTED OBJECTS:
+    // We map sub-properties explicitly to protect existing fields from deletion
+    if (req.body.provider_profile) {
+      const pp = req.body.provider_profile;
+      if (pp.bio !== undefined) updateFields["provider_profile.bio"] = pp.bio;
+      if (pp.category !== undefined)
+        updateFields["provider_profile.category"] = pp.category;
+      if (pp.secondaryCategories !== undefined)
+        updateFields["provider_profile.secondaryCategories"] =
+          pp.secondaryCategories;
+      if (pp.service_area !== undefined)
+        updateFields["provider_profile.service_area"] = pp.service_area;
+      if (pp.service_radius_km !== undefined)
+        updateFields["provider_profile.service_radius_km"] = Number(
+          pp.service_radius_km,
+        );
+      if (pp.experience_years !== undefined)
+        updateFields["provider_profile.experience_years"] = Number(
+          pp.experience_years,
+        );
+      if (pp.hourly_rate !== undefined)
+        updateFields["provider_profile.hourly_rate"] = Number(pp.hourly_rate);
+      if (pp.base_price !== undefined)
+        updateFields["provider_profile.base_price"] = Number(pp.base_price);
+      if (pp.open_for_work !== undefined)
+        updateFields["provider_profile.open_for_work"] = pp.open_for_work;
+    }
+
+    // 3. Home Address Subdocument Safe Mapping
+    if (req.body.home_address) {
+      const ha = req.body.home_address;
+      if (ha.street !== undefined)
+        updateFields["home_address.street"] = ha.street;
+      if (ha.area !== undefined) updateFields["home_address.area"] = ha.area;
+      if (ha.gps_code !== undefined)
+        updateFields["home_address.gps_code"] = ha.gps_code;
+      if (ha.coordinates !== undefined)
+        updateFields["home_address.coordinates"] = ha.coordinates;
+    }
+
+    // 4. 🛑 SECURITY SAFEGUARD: Never allow email tampering via a generic patch profile endpoint
+    // Changes to email configurations must run through a distinct route to prevent verification exploits!
+
+    delete updateFields.status;
+    delete updateFields.roles;
+    delete updateFields.isVerified;
+
+    // 5. Commit calculations and retrieve modified profile document record
+    const updatedUser = await User.findByIdAndUpdate(
+      activeUserId,
+      { $set: updateFields },
+      { new: true, runValidators: true }, // 'new: true' pushes the updated state package back
+    ).select("-password"); // Strip encrypted secret values out entirely
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile updated successfully!",
+      data: updatedUser,
+    });
+  } catch (error) {
+    console.error("❌ Profile Update Process Error:", error);
+
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        success: false,
+        message: Object.values(error.errors)
+          .map((err) => err.message)
+          .join(", "),
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update profile",
       error: error.message,
     });
   }

@@ -362,45 +362,45 @@ bookingSchema.index({
 // // ===================== INSTANCE METHODS =====================
 
 // // Cancel booking
-// bookingSchema.methods.cancel = function (reason = "") {
-//   if (!this.canCancel) {
-//     throw new Error("This booking cannot be cancelled");
-//   }
-//   this.status = "cancelled";
-//   this.cancelledAt = new Date();
-//   this.cancelledReason = reason;
-//   return this.save();
-// };
+bookingSchema.methods.cancel = function (reason = "") {
+  if (!this.canCancel) {
+    throw new Error("This booking cannot be cancelled");
+  }
+  this.status = "cancelled";
+  this.cancelledAt = new Date();
+  this.cancelledReason = reason;
+  return this.save();
+};
 
 // // Confirm booking
-// bookingSchema.methods.confirm = function () {
-//   if (!this.canConfirm) {
-//     throw new Error("Only pending bookings can be confirmed");
-//   }
-//   this.status = "confirmed";
-//   this.confirmedAt = new Date();
-//   return this.save();
-// };
+bookingSchema.methods.confirm = function () {
+  if (!this.canConfirm) {
+    throw new Error("Only pending bookings can be confirmed");
+  }
+  this.status = "confirmed";
+  this.confirmedAt = new Date();
+  return this.save();
+};
 
 // // Start booking (in-progress)
-// bookingSchema.methods.start = function () {
-//   if (!this.canStart) {
-//     throw new Error("Only confirmed bookings can be started");
-//   }
-//   this.status = "in_progress";
-//   this.startedAt = new Date();
-//   return this.save();
-// };
+bookingSchema.methods.start = function () {
+  if (!this.canStart) {
+    throw new Error("Only confirmed bookings can be started");
+  }
+  this.status = "in_progress";
+  this.startedAt = new Date();
+  return this.save();
+};
 
 // // Complete booking
-// bookingSchema.methods.complete = function () {
-//   if (!this.canComplete) {
-//     throw new Error("Only confirmed or in-progress bookings can be completed");
-//   }
-//   this.status = "completed";
-//   this.completedAt = new Date();
-//   return this.save();
-// };
+bookingSchema.methods.complete = function () {
+  if (!this.canComplete) {
+    throw new Error("Only confirmed or in-progress bookings can be completed");
+  }
+  this.status = "completed";
+  this.completedAt = new Date();
+  return this.save();
+};
 
 // // Mark as no-show
 // bookingSchema.methods.markAsNoShow = function () {
@@ -578,29 +578,54 @@ bookingSchema.index({
 // };
 
 // // Check for conflicting bookings
-// bookingSchema.statics.checkConflicts = async function (
-//   providerId,
-//   date,
-//   time,
-//   excludeBookingId = null,
-// ) {
-//   const query = {
-//     providerId: new mongoose.Types.ObjectId(providerId),
-//     bookingDate: new Date(date),
-//     bookingTime: time,
-//     status: { $in: ["pending", "confirmed"] },
-//     isDeleted: false,
-//   };
+bookingSchema.statics.checkConflicts = async function (
+  customerId,
+  providerId,
+  date,
+  time,
+) {
+  const bookingDate = new Date(date);
 
-//   if (excludeBookingId) {
-//     query._id = {
-//       $ne: new mongoose.Types.ObjectId(excludeBookingId),
-//     };
-//   }
+  const activeStatuses = ["pending", "confirmed", "in_progress", "rescheduled"];
 
-//   const conflicting = await this.findOne(query);
-//   return !!conflicting;
-// };
+  // Provider conflict
+  const providerConflict = await this.findOne({
+    providerId,
+    bookingDate,
+    bookingTime: time,
+    status: {
+      $in: activeStatuses,
+    },
+    isDeleted: false,
+  });
+
+  if (providerConflict) {
+    return {
+      type: "provider",
+      booking: providerConflict,
+    };
+  }
+
+  // Customer conflict
+  const customerConflict = await this.findOne({
+    customerId,
+    bookingDate,
+    bookingTime: time,
+    status: {
+      $in: activeStatuses,
+    },
+    isDeleted: false,
+  });
+
+  if (customerConflict) {
+    return {
+      type: "customer",
+      booking: customerConflict,
+    };
+  }
+
+  return null;
+};
 // // ===================== MIDDLEWARE =====================
 
 // // Pre-save middleware
