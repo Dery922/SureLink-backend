@@ -1,6 +1,7 @@
 import { AppError } from "../utils/errors.js";
 import { successResponse } from "../utils/apiResponse.js";
 import User from "../models/User.js";
+import Service from "../models/Service.js";
 
 //import { successResponse } from "../services/apiResponse.js";
 import {
@@ -14,7 +15,6 @@ import {
 import { issueOtp, verifyOtp } from "../services/otpService.js";
 import jwt from "jsonwebtoken";
 import cloudinary from "../config/cloudinary.js";
-import Service from "../models/Service.js";
 import mongoose from "mongoose";
 
 import locationService from "../services/locationService.js";
@@ -444,6 +444,39 @@ export async function saveProviderProfile(req, res, next) {
     };
 
     await user.save();
+
+    // 🔥 NEW: Create default service for the provider
+    try {
+      const category = user.provider_profile?.category || "General";
+      const basePrice = user.provider_profile?.base_price || 0;
+      
+      // Check if provider already has any services
+      const existingServices = await Service.findOne({ 
+        providerId: user._id 
+      });
+      
+      // Only create default service if none exist
+      if (!existingServices) {
+        const defaultService = new Service({
+          providerId: user._id,
+          name: `${category} Services`,
+          description: `Standard ${category} services provided by ${user.name?.full || 'our professional'}`,
+          category: category,
+          basePrice: basePrice,
+          price: basePrice, // Legacy support
+          priceType: "fixed",
+          is_active: true,
+          // Add any other default fields your Service model requires
+        });
+        
+        await defaultService.save();
+        console.log(`✅ Default service created for provider: ${user._id}`);
+      }
+    } catch (serviceError) {
+      // Log error but don't fail the onboarding
+      console.error("Failed to create default service:", serviceError);
+      // Continue with the response - the provider is still onboarded
+    }
 
     // Sanitize user document
     const sanitizedUser = formatUserPayload(user);

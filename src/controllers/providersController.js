@@ -1,6 +1,8 @@
 import User from "../models/User.js";
 import Review from "../models/Review.js"; // Adjust the path as needed
 import Booking from "../models/Booking.js"; // Assumes you have a Booking model
+import Notification from "../models/Notification.js";
+import mongoose from "mongoose";
 
 /**
  * Get ALL providers without pagination
@@ -131,3 +133,250 @@ export const createReview = async (req, res) => {
     });
   }
 };
+
+
+/**this function is for customer reviewing provider */
+export const reviewProvider = async (req, res) => {
+
+  try {
+    const { bookingId, rating, comment } = req.body;
+    const customerId = req.user._id; // Extracted from your auth middleware
+
+    // 1. Fetch booking details to get the provider & service metadata
+    const booking = await Booking.findOne({ _id: bookingId, customerId: customerId });
+    if (!booking) {
+      return res.status(404).json({ message: "Booking transaction not found." });
+    }
+
+    if (booking.status !== 'completed') {
+      return res.status(400).json({ message: "You can only review a completed service." });
+    }
+
+    // 2. Prevent duplicate submissions by the same user
+    const existingReview = await Review.findOne({ bookingId, reviewerId: customerId });
+    if (existingReview) {
+      return res.status(400).json({ message: "You have already submitted a review for this booking." });
+    }
+
+    // 3. Create the review mapping the customer to the provider
+    const newReview = await Review.create({
+      bookingId: booking._id,
+      reviewerId: customerId,              // The Customer
+      revieweeId: booking.providerId,      // The Provider
+      serviceId: booking.serviceId,        // The Service type
+      rating: parseInt(rating),
+      comment: comment || ""
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Review posted successfully!",
+      review: newReview
+    });
+
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+
+}
+
+export const markNotificationsAsRead = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const notification = await Notification.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        userId: userId
+      },
+      {
+        isRead: true
+      },
+      {
+        new: true
+      }
+    );
+
+    if (!notification) {
+      return res.status(404).json({
+        message: "Notification not found"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      notification
+    });
+
+  } catch (error) {
+    console.error("Mark notification read error:", error);
+    return res.status(500).json({
+      message: error.message
+    });
+  }
+};
+
+
+/**this function is for un review providers, simple fetching all reviews that a */
+
+export const unreviewedProvider = async (req, res) => {
+  try {
+    const customerId = req.user._id;
+
+    // 1. Get all completed bookings for this user
+    const completedBookings = await Booking.find({
+      customerId,
+      status: 'completed'
+    }).sort({ completedAt: -1 });
+
+    // 2. Find which booking IDs have already been reviewed by this customer
+    const reviewedIds = await Review.find({
+      reviewerId: customerId,
+      bookingId: { $in: completedBookings.map(b => b._id) }
+    }).distinct('bookingId');
+
+    // 3. Filter out reviewed bookings to find the pending ones
+    const unreviewed = completedBookings.filter(
+      booking => !reviewedIds.map(id => id.toString()).includes(booking._id.toString())
+    );
+
+    return res.status(200).json(unreviewed);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+}
+
+
+
+// @desc    Get all reviews for a provider (reviewee)
+// @route   GET /api/reviews/provider/:providerId
+// @access  Public
+export const getProviderReviews = async (req, res) => {
+  console.log("🔥 PUBLIC REVIEW ROUTE HIT");
+  try {
+    const { providerId } = req.params;
+    const { page = 1, limit = 10, sort = 'recent' } = req.query;
+
+    // Validate provider exists
+    const provider = await User.findById(providerId);
+    if (!provider) {
+      return res.status(404).json({
+        success: false,
+        message: 'Provider not found'
+      });
+    }
+
+    // Build sort options
+    let sortOptions = {};
+    switch (sort) {
+      case 'recent':
+        sortOptions = { createdAt: -1 };
+        break;
+      case 'highest':
+        sortOptions = { rating: -1 };
+        break;
+      case 'lowest':
+        sortOptions = { rating: 1 };
+        break;
+      default:
+        sortOptions = { createdAt: -1 };
+    }
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Get reviews with pagination
+    const [reviews, total] = await Promise.all([
+      Review.find({
+        revieweeId: providerId,
+        status: 'active'
+      })
+        .populate('reviewerId', 'name avatar email')
+        .populate('serviceId', 'name category')
+        .populate('bookingId', 'status date')
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      Review.countDocuments({
+        revieweeId: providerId,
+        status: 'active'
+      })
+    ]);
+
+    // Get rating breakdown
+    const ratingBreakdown = await getRatingBreakdown(providerId);
+
+    // Format reviews for frontend
+    const formattedReviews = reviews.map(review => ({
+      _id: review._id,
+      rating: review.rating,
+      comment: review.comment,
+      images: review.images || [],
+      createdAt: review.createdAt,
+      name: review.reviewerId?.name?.full || review.reviewerId?.name || 'Anonymous',
+      avatar: review.reviewerId?.avatar?.url || null,
+      serviceName: review.serviceId?.name || 'Service',
+      bookingId: review.bookingId?._id,
+      isEdited: review.isEdited || false,
+      editedAt: review.editedAt || null
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        reviews: formattedReviews,
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(total / parseInt(limit)),
+        stats: {
+          averageRating: provider.trust?.average_rating || 0,
+          totalReviews: provider.trust?.total_ratings || 0,
+          ratingBreakdown
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get provider reviews error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching reviews',
+      error: error.message
+    });
+  }
+};
+
+// Helper function to get rating breakdown
+const getRatingBreakdown = async (providerId) => {
+  const breakdown = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+
+  const results = await Review.aggregate([
+    {
+      $match: {
+        revieweeId: new mongoose.Types.ObjectId(providerId),
+        status: 'active'
+      }
+    },
+    {
+      $group: {
+        _id: '$rating',
+        count: { $sum: 1 }
+      }
+    }
+  ]);
+
+  const total = results.reduce((sum, r) => sum + r.count, 0);
+
+  if (total > 0) {
+    results.forEach(({ _id, count }) => {
+      if (_id >= 1 && _id <= 5) {
+        breakdown[_id] = Math.round((count / total) * 100);
+      }
+    });
+  }
+
+  return breakdown;
+};
+

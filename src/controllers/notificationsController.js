@@ -4,7 +4,10 @@ import Notification from "../models/Notification.js";
 // Fetch user's notification list
 export const getMyNotifications = async (req, res) => {
   try {
-    const notifications = await Notification.find({ recipientId: req.user.id })
+    const notifications = await Notification.find({
+      recipientId: req.user.id,
+      isRead: false
+    })
       .sort({ createdAt: -1 })
       .limit(20);
 

@@ -54,7 +54,9 @@ const reviewSchema = new mongoose.Schema(
 );
 
 // FIX 1: Enforce one review per unique booking transaction
-reviewSchema.index({ bookingId: 1 }, { unique: true });
+// Replace Fix 1 with this in your Review model file:
+reviewSchema.index({ bookingId: 1, reviewerId: 1 }, { unique: true });
+
 
 // FIX 2: Compound index for blazing-fast profile queries (Sorted by newest first)
 reviewSchema.index({ revieweeId: 1, status: 1, createdAt: -1 });

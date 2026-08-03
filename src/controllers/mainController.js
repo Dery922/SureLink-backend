@@ -396,7 +396,7 @@ export const getProviderById = async (req, res) => {
   }
 };
 
-// export const getProviderById = async (req, res) => {
+
 //   try {
 //     const { id } = req.params;
 

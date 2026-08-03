@@ -19,11 +19,7 @@ import { getAllProviders } from "../../controllers/providersController.js";
 
 const router = Router();
 
-// Move this test route to a separate path or remove it
-// router.get("/home", (req, res) => {
-//   console.log("Welcome home because all just started and is for testing");
-//   res.json({ message: "Welcome home" });
-// });
+
 
 // IMPORTANT: More specific routes should come FIRST
 router.get("/get/all/categories/providers", getAllProviders);

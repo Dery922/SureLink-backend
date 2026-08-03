@@ -13,6 +13,7 @@ import { Server } from "socket.io";
 import { errorResponse } from "./src/services/apiResponse.js";
 
 // Routes
+import providerRoutes from "./src/modules/providerRoutes.js";
 import authRoutes from "./src/modules/auth/auth.routes.js";
 import mainRoutes from "./src/modules/main/main.routes.js";
 import activityRoutes from "./src/modules/activityRoutes.js";
@@ -22,6 +23,7 @@ import userRoutes from "./src/services/user.routes.js";
 import { initializeAuthEventHandlers } from "./src/services/authEvents.js";
 import providerStatsRoutes from "./src/modules/providerStatsRoutes.js";
 import notificationsRoutes from "./src/modules/notificationsRoutes.js";
+
 
 // Admin module
 import adminAuthRoutes from "./src/admin/routes/adminAuth.routes.js";
@@ -64,9 +66,9 @@ app.use((req, res, next) => {
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
   : [
-      process.env.FRONTEND_URL || "http://localhost:3000",
-      "http://localhost:5173",
-    ];
+    process.env.FRONTEND_URL || "http://localhost:3000",
+    "http://localhost:5173",
+  ];
 
 app.use(
   cors({
@@ -109,6 +111,7 @@ app.use(
 // app.use("/api/", limiter);
 
 // ================== APPLICATION ROUTES ==================
+app.use("/api", providerRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api", mainRoutes);
 app.use("/api", bookingRoutes);
@@ -117,6 +120,7 @@ app.use("/api/users", userRoutes);
 app.use("/api", providerStatsRoutes);
 app.use("/api", activityRoutes);
 app.use("/api", notificationsRoutes);
+
 
 // Admin module routes
 app.use("/api/admin/auth", adminAuthRoutes);
