@@ -22,6 +22,10 @@ const reviewSchema = new mongoose.Schema(
       ref: "Service",
       required: true,
     },
+    tags: {
+      type: [String],
+      default: [],
+    },
     rating: {
       type: Number,
       required: true,

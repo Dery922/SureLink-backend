@@ -23,6 +23,11 @@ import userRoutes from "./src/services/user.routes.js";
 import { initializeAuthEventHandlers } from "./src/services/authEvents.js";
 import providerStatsRoutes from "./src/modules/providerStatsRoutes.js";
 import notificationsRoutes from "./src/modules/notificationsRoutes.js";
+import customerRoutes from "./src/modules/customerRoutes.js"
+import chatRoutes from "./src/modules/chatRoutes.js";
+
+//sockets
+import { initializeSocket } from "./src/socket/index.js";
 
 
 // Admin module
@@ -42,15 +47,10 @@ const app = express();
 const server = http.createServer(app);
 
 // ================== SOCKET.IO ==================
-const io = new Server(server, {
-  cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
-    credentials: true,
-  },
-});
+
+const io = initializeSocket(server);
 
 app.set("io", io);
-
 // ================== GLOBAL MIDDLEWARES ==================
 app.set("trust proxy", false);
 app.use(express.json({ limit: "10mb" }));
@@ -111,15 +111,21 @@ app.use(
 // app.use("/api/", limiter);
 
 // ================== APPLICATION ROUTES ==================
+app.use("/api", notificationsRoutes);
+
 app.use("/api", providerRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api", mainRoutes);
+app.use("/api", chatRoutes);
 app.use("/api", bookingRoutes);
 app.use("/api", paystackRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api", providerStatsRoutes);
 app.use("/api", activityRoutes);
-app.use("/api", notificationsRoutes);
+
+
+
+app.use("/api", customerRoutes);
 
 
 // Admin module routes
@@ -161,14 +167,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ================== SOCKET EVENTS ==================
-io.on("connection", (socket) => {
-  console.log("🔌 User connected:", socket.id);
 
-  socket.on("disconnect", () => {
-    console.log("❌ User disconnected:", socket.id);
-  });
-});
 
 // ================== START SERVER ==================
 const PORT = process.env.PORT || 5000;

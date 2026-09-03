@@ -47,6 +47,10 @@ router.get("/:providerId/ratings", getRatingDistribution);
 // GET /api/providers/:providerId/performance
 // ==========================================
 router.get("/:providerId/performance", getPerformanceMetrics);
-router.post("/rate", authMiddleware, createReview);
+//router.post("/rate", authMiddleware, createReview);
+router.post("/bookings/:bookingId/rate", authMiddleware, createReview);
+
+//this booking is for customer rating a provider
+
 
 export default router;

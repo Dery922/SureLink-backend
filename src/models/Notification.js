@@ -53,6 +53,7 @@ const notificationSchema = new mongoose.Schema(
       default: false,
       index: true,
     },
+    isSeen: { type: Boolean, default: false },   // ← User opened dropdown
     readAt: {
       type: Date,
     },

@@ -302,10 +302,6 @@ export const createBooking = async (req, res) => {
     });
   }
 };
-// ==========================================
-// CREATE BOOKING
-// POST /api/bookings
-// ==========================================
 export const checkBookingAvailability = async (req, res) => {
   try {
     const { providerId, date, time } = req.body;
@@ -351,11 +347,6 @@ export const checkBookingAvailability = async (req, res) => {
   }
 };
 
-// ==========================================
-// INCOMING BOOKINGS
-// Provider receives bookings
-// GET /api/bookings/incoming
-// ==========================================
 export const getIncomingBookings = async (req, res) => {
   try {
     const page = Number(req.query.page) || 1;
@@ -397,42 +388,27 @@ export const getIncomingBookings = async (req, res) => {
       .json({ success: false, message: "Failed to fetch bookings" });
   }
 };
-
-// ==========================================
-// OUTGOING BOOKINGS
-// Customer bookings
-// GET /api/bookings/outgoing
-// ==========================================
 export const getOutgoingBookings = async (req, res) => {
   try {
     const page = Number(req.query.page) || 1;
-
     const limit = Number(req.query.limit) || 10;
-
     const skip = (page - 1) * limit;
 
     const filter = {
       customerId: req.user.id,
-
       isDeleted: false,
+      status: {
+        $in: ["pending", "in_progress"],
+      },
     };
 
-    if (req.query.status) {
-      filter.status = req.query.status;
-    }
-
     const bookings = await Booking.find(filter)
-
       .populate("providerId", "name email phone avatar")
-
       .populate("serviceId", "name category price description")
-
       .sort({
         createdAt: -1,
       })
-
       .skip(skip)
-
       .limit(limit);
 
     const total = await Booking.countDocuments(filter);
@@ -441,15 +417,12 @@ export const getOutgoingBookings = async (req, res) => {
 
     res.status(200).json({
       success: true,
-
       data: bookings,
-
       pagination: {
         page,
         pages: Math.ceil(total / limit),
         total,
       },
-
       stats,
     });
   } catch (error) {
@@ -457,24 +430,16 @@ export const getOutgoingBookings = async (req, res) => {
 
     res.status(500).json({
       success: false,
-
       message: "Failed to fetch outgoing bookings",
-
       error: error.message,
     });
   }
 };
 
-// ==========================================
-// BOOKING HISTORY
-// GET /api/bookings/history
-// ==========================================
 export const getBookingHistory = async (req, res) => {
   try {
     const page = Number(req.query.page) || 1;
-
     const limit = Number(req.query.limit) || 10;
-
     const skip = (page - 1) * limit;
 
     const filter = {
@@ -482,69 +447,61 @@ export const getBookingHistory = async (req, res) => {
         {
           customerId: req.user.id,
         },
-
         {
           providerId: req.user.id,
         },
       ],
-
       status: {
         $in: ["completed", "cancelled", "no_show"],
       },
-
       isDeleted: false,
     };
 
     const bookings = await Booking.find(filter)
-
       .populate("customerId", "name email phone avatar")
-
       .populate("providerId", "name email phone avatar")
-
       .populate("serviceId", "name category price description")
-
+      // ✅ POPULATE THE RATING
+      .populate({
+        path: "rating", // This should match the ref in your Booking schema
+        match: {
+          // If you want only the current user's rating
+          // reviewerId: req.user.id
+        },
+        options: {
+          sort: { createdAt: -1 },
+          limit: 1, // Get the most recent rating
+        }
+      })
       .sort({
         createdAt: -1,
       })
-
       .skip(skip)
-
       .limit(limit);
 
     const total = await Booking.countDocuments(filter);
-
     const stats = await getBookingStats(req.user.id);
 
     res.status(200).json({
       success: true,
-
       data: bookings,
-
       pagination: {
         page,
         pages: Math.ceil(total / limit),
         total,
       },
-
       stats,
     });
   } catch (error) {
     console.error("History Error:", error);
-
     res.status(500).json({
       success: false,
-
       message: "Failed to fetch booking history",
-
       error: error.message,
     });
   }
 };
 
-// ==========================================
-// GET ALL USER BOOKINGS
-// GET /api/bookings
-// ==========================================
 export const getAllBookings = async (req, res) => {
   try {
     const bookings = await Booking.find({
@@ -585,10 +542,6 @@ export const getAllBookings = async (req, res) => {
   }
 };
 
-// ==========================================
-// GET SINGLE BOOKING
-// GET /api/bookings/:id
-// ==========================================
 export const getSingleBooking = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id)
@@ -623,7 +576,6 @@ export const getSingleBooking = async (req, res) => {
   }
 };
 
-// ==========================================
 // ACCEPT / CONFIRM BOOKING
 // PUT /api/bookings/:id/accept
 // ==========================================
@@ -670,7 +622,6 @@ export const getSingleBooking = async (req, res) => {
 //     });
 //   }
 // };
-
 export const acceptBooking = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id);
@@ -794,6 +745,105 @@ export const cancelBooking = async (req, res) => {
     });
   }
 };
+
+
+// controllers/bookingController.js - Customer Cancel Booking
+
+export const customerCancelBooking = async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found",
+      });
+    }
+
+    // Verify the user is the customer who made the booking
+    const isCustomer = String(booking.customerId) === String(req.user.id);
+
+    if (!isCustomer) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to cancel this booking",
+      });
+    }
+
+    // Check if booking can be cancelled (only pending bookings)
+    if (booking.status === "completed") {
+      return res.status(400).json({
+        success: false,
+        message: "Completed bookings cannot be cancelled",
+      });
+    }
+
+    if (booking.status === "cancelled") {
+      return res.status(400).json({
+        success: false,
+        message: "Booking is already cancelled",
+      });
+    }
+
+    // Capture the cancel reason from the body
+    const reasonText = req.body.reason || "No reason provided";
+
+    // Update booking status
+    booking.status = "cancelled";
+    booking.cancelledAt = new Date();
+    booking.cancelledReason = reasonText;
+    booking.cancelledBy = "customer"; // Track who cancelled
+
+    await booking.save();
+
+    // 🚀 SEND NOTIFICATION TO PROVIDER
+    await createNotification({
+      recipientId: booking.providerId, // Notify the provider
+      senderId: req.user.id,
+      title: "Booking Cancelled by Customer 🛑",
+      message: `${booking.customerName || 'Customer'} has cancelled the booking for "${booking.serviceName}". Reason: ${reasonText}`,
+      type: "booking_cancelled",
+      relatedId: booking._id,
+      onModel: "Booking",
+    });
+
+    // 🚀 SEND CONFIRMATION TO CUSTOMER (optional but good UX)
+    await createNotification({
+      recipientId: req.user.id,
+      senderId: req.user.id,
+      title: "Booking Cancelled Successfully ✅",
+      message: `Your booking for "${booking.serviceName}" has been cancelled successfully.`,
+      type: "booking_cancelled",
+      relatedId: booking._id,
+      onModel: "Booking",
+    });
+
+    // Process refund if payment was made
+    if (booking.paymentStatus === "paid" || booking.paymentStatus === "partially_paid") {
+      // You can trigger a refund process here
+      // This would depend on your payment integration
+      console.log(`💰 Refund initiated for booking ${booking._id} - Amount: ${booking.totalAmount}`);
+
+      // Optionally update payment status
+      booking.paymentStatus = "refunded";
+      await booking.save();
+    }
+
+    return res.json({
+      success: true,
+      message: "Booking cancelled successfully",
+      data: booking,
+    });
+  } catch (error) {
+    console.error("❌ Cancel Booking Controller Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to cancel booking",
+      error: error.message,
+    });
+  }
+};
+
 
 // ==========================================
 // COMPLETE BOOKING
@@ -963,11 +1013,10 @@ const formatBooking = (booking, currentUserId) => {
     time: bookingObj.bookingTime,
 
     location: bookingObj.location
-      ? `${bookingObj.location.address}, ${bookingObj.location.city}${
-          bookingObj.location.landmark
-            ? ` (${bookingObj.location.landmark})`
-            : ""
-        }`
+      ? `${bookingObj.location.address}, ${bookingObj.location.city}${bookingObj.location.landmark
+        ? ` (${bookingObj.location.landmark})`
+        : ""
+      }`
       : "Not specified",
 
     address: bookingObj.location?.address,

@@ -9,6 +9,7 @@ import {
   checkBookingAvailability,
   completeBooking,
   createBooking,
+  customerCancelBooking,
   getAllBookings,
   getBookingHistory,
   getIncomingBookings,
@@ -79,5 +80,8 @@ router.put("/bookings/:id/complete", authMiddleware, completeBooking);
 router.patch("/mute-onboarding", authMiddleware, muteOnboardingAlert);
 router.get("/pending", authMiddleware, getPendingRequests);
 router.patch("/:id/respond", authMiddleware, respondToRequest);
+
+// Cancel a booking (customer only)
+router.put('/bookings/customer/:id/cancel', authMiddleware, customerCancelBooking);
 
 export default router;

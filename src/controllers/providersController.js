@@ -43,9 +43,12 @@ export async function getAllProviders(req, res, next) {
   }
 }
 
+
+//provider reviewing customers
 export const createReview = async (req, res) => {
   try {
-    const { bookingId, rating, comment, tags } = req.body;
+    const { bookingId } = req.params
+    const { rating, comment, tags } = req.body;
     const reviewerId = req.user.id; // Populated from your authentication middleware
 
     // 1. Validate basic required fields from payload
@@ -135,6 +138,9 @@ export const createReview = async (req, res) => {
 };
 
 
+
+
+
 /**this function is for customer reviewing provider */
 export const reviewProvider = async (req, res) => {
 
@@ -180,41 +186,6 @@ export const reviewProvider = async (req, res) => {
 
 }
 
-export const markNotificationsAsRead = async (req, res) => {
-  try {
-    const userId = req.user._id;
-
-    const notification = await Notification.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        userId: userId
-      },
-      {
-        isRead: true
-      },
-      {
-        new: true
-      }
-    );
-
-    if (!notification) {
-      return res.status(404).json({
-        message: "Notification not found"
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      notification
-    });
-
-  } catch (error) {
-    console.error("Mark notification read error:", error);
-    return res.status(500).json({
-      message: error.message
-    });
-  }
-};
 
 
 /**this function is for un review providers, simple fetching all reviews that a */
@@ -378,5 +349,66 @@ const getRatingBreakdown = async (providerId) => {
   }
 
   return breakdown;
+};
+
+
+export const getRatingStatus = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const reviewerId = req.user.id;
+
+    // 1. Validate booking ID
+    if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid booking ID.",
+      });
+    }
+
+    // 2. Find the booking
+    const booking = await Booking.findById(bookingId);
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "The requested booking transaction was not found.",
+      });
+    }
+
+    // 3. Make sure the logged-in user participated in this booking
+    const isCustomer =
+      booking.customerId.toString() === reviewerId.toString();
+
+    const isProvider =
+      booking.providerId.toString() === reviewerId.toString();
+
+    if (!isCustomer && !isProvider) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to access the rating status for this booking.",
+      });
+    }
+
+    // 4. Check whether this user has already submitted a review
+    const existingReview = await Review.findOne({
+      bookingId: booking._id,
+      reviewerId,
+    });
+
+    // 5. Return rating status
+    return res.status(200).json({
+      success: true,
+      data: {
+        isRated: !!existingReview,
+      },
+    });
+  } catch (error) {
+    console.error("Rating Status Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "An internal server error occurred while checking rating status.",
+    });
+  }
 };
 
